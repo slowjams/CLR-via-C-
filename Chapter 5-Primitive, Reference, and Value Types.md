@@ -89,18 +89,46 @@ checked {
 ## Value Types (Struct)
 All of the structures are immediately derived from the `System.ValueType` abstract type. `System.ValueType` is itself immediately derived from the `System.Object` type. By definition, all value types must be derived from `System.ValueType`. All enumerations are derived from the `System.Enum` abstract type, which is itself derived from `System.ValueType`.
 ```C#
+class Program {
+   static void Main(string[] args) {
+
+      SomeVal v1 = new SomeVal();   // Allocated on stack, even though the new keyword is used
+
+      // These two lines compile because C# thinks that v1's fields have been initialized to 0.
+      SomeVal v1 = new SomeVal();
+      Int32 a = v1.x;
+
+      // These two lines don't compile because C# doesn't think that v1's fields have been initialized to 0.
+      SomeVal v1;
+      Int32 a = v1.x; // error CS0170: Use of possibly unassigned field 'x'
+   }
+}
+
 struct SomeVal { public Int32 x; }
-
-SomeVal v1 = new SomeVal();            // Allocated on stack, even though the new keyword is used
-
-// These two lines compile because C# thinks that v1's fields have been initialized to 0.
-SomeVal v1 = new SomeVal();
-Int32 a = v1.x;
-
-// These two lines don't compile because C# doesn't think that v1's fields have been initialized to 0.
-SomeVal v1;
-Int32 a = v1.x; // error CS0170: Use of possibly unassigned field 'x'
 ```
+
+However the code below can complie:
+
+```C#
+class Program {
+   static void Main(string[] args) {
+      MyClass myClass = new MyClass();
+      var tem = myClass.val;
+   }
+}
+
+public class MyClass {
+   public SomeVal val;
+}
+
+public struct SomeVal { public Int32 x; }
+```
+Because when `new MyClass()`, it is `SomeVal val` is initialized. That's why you cannot provide a default constructor to a struct, because of CLR optimization. For instance, consider this:
+
+```C#
+MyStruct[] foo = new MyStruct[1000];
+```
+The CLR is able to do this very efficiently just by allocating the appropriate memory and zeroing it all out. If it had to run the MyStruct constructor 1000 times, that would be a lot less efficient.
 
 <div class="alert alert-info pt-2 pb-0" role="alert">
     <ul class="pl-1">

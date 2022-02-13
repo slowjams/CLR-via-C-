@@ -537,9 +537,45 @@ static Int32 Sum(CancellationToken ct, Int32 n) {
    return sum;
 }
 ```
-Note that a Task object has a CancellationToken associated with it, there is no way to access it (there is nothing like nothing like `Task.CurrentTask.CancellationToken`), so you must somehow get the same CancellationToken that was used to create the Task object into the Task's code itself. The easiest way to write this code is to use a lambda expression and “pass” the CancellationToken as a closure variable (as I've done in the previous code example).
+Note that a Task object has a CancellationToken associated with it, there is no way to access it (there is nothing like nothing like `Task.CurrentTask.CancellationToken`), so you must somehow get the same CancellationToken that was used to create the Task object into the Task's code itself. The easiest way to write this code is to use a lambda expression and "pass" the CancellationToken as a closure variable (as I've done in the previous code example).
 
-Note that the Sum mehotd periodically checks to see if the operation has been canceled by calling CancellationToken's ThrowIfCancellationRequested method. This method is similar to CancellationToken's IsCancellationRequested property shown eariler in the "Cooperative Cancellation and Timeout" section. However, `ThrowIFCancellationRequested` thwos an `OperationCanceledException` if the CancellationTokenSource has been canceled. The reason for throwing an exception is because, unlike work items initiated with ThreadPool's QueueUserWorkItem method, tasks have the notion of having completed and a task can even retrun a value. So, there needs to be a way to distinguish a completed task from a canceled task, and having the task throw an exception lets you know that the task did not run all the way to completion, even though this exception will be swallowed by the task and be rethrow as a new `AggregateException` when Task's Wait method is called or Task's Result property is queried.
+Note that the Sum mehotd periodically checks to see if the operation has been canceled by calling CancellationToken's ThrowIfCancellationRequested method. This method is similar to CancellationToken's `IsCancellationRequested` property shown eariler in the "Cooperative Cancellation and Timeout" section. However, `ThrowIFCancellationRequested` throws an `OperationCanceledException` if the CancellationTokenSource has been canceled. The reason for throwing an exception is because, unlike work items initiated with ThreadPool's QueueUserWorkItem method, tasks have the notion of having completed and a task can even retrun a value. So, there needs to be a way to distinguish a completed task from a canceled task, and having the task throw an exception lets you know that the task did not run all the way to completion, even though this exception will be swallowed by the task and be rethrow as a new `AggregateException` when Task's Wait method is called or Task's Result property is queried.
+
+Note that:
+```C#
+static void Main(string[] args) {
+   CancellationTokenSource cts = new CancellationTokenSource();
+
+   var task = Task.Delay(2000, cts.Token);
+   cts.Cancel();
+
+   var exceptionProp = task.Exception;  // <------------ task's Exception is null
+
+   Console.ReadLine();
+}
+```
+You might wonder why `task.Exception` is null, but this exception indicates successful cancellation instead of a faulty situation. Therefore, the task's Exception property returns null. If you want to know whether the operation throws an exception in this situation, you will need to query task's `TaskStatus` property
+
+Compared with this one:
+```C#
+static void Main(string[] args) {
+   var task = Task.Run(() => { throw new Exception("Oops"); });
+   Thread.Sleep(1000);
+   var exceptionProp = task.Exception;  // <------------ task's Exception contains the AggregateException which in turn contains TaskCanceledException
+   // ...  
+}
+```
+```C#
+public class TaskCanceledException : OperationCanceledException {
+   // ...
+   public Task? Task { get; }
+}
+
+public class OperationCanceledException : SystemException {   
+   // ...
+   public CancellationToken CancellationToken { get; }
+}
+```
 
 By the way, if you try to cancel a task before it is even started, an `InvalidOperationException` is thrown.
 ```C#
