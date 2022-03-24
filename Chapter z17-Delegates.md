@@ -301,7 +301,7 @@ Because all delegate types are derived from MulticastDelegate, they inherit Mult
 
 | Field | Type | Description |
 | -------------- | ---------- | ----------- |
-| _target | System.Object | When the delegate object wraps a static method, this field is null. When the delegate objects wraps an instance method, this field refers to the object thath should be operated on when the callback method is called. In other words, this field indicates the value that should be passed for the instance method's implicit `this` parameter.  |
+| _target | System.Object | When the delegate object wraps a static method, this field is null. When the delegate objects wraps an instance method, this field refers to the object  should be operated on when the callback method is called. In other words, this field indicates the value that should be passed for the instance method's implicit `this` parameter.  |
 | _methodPtr | System.IntPtr  | An internal integer the CLR uses to identify the method that is to be called back. |
 | _invocationList | System.Object  | This field is usually null. It can refer to an array of delegates when building a delegate chain. |
 

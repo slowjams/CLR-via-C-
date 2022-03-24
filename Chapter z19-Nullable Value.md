@@ -341,8 +341,25 @@ Int32 result = ((IComparable) (Int32) n).CompareTo(5); // Cumbersome
 
 ## Nullable Reference Types
 
-In C# 8.0, we can make a reference type nullable. Let's say we have the following code without Nullable function turning on:
+Prior to C# 8.0, all reference types were nullable. Start from C# 8.0, **everything is non-nullable by default** (The `null` literal type is the only type that is nullable by default), so reference types is like structs now (structs can't be null).
+So from C# 8.0, we need to explicit make a reference type nullable if we need it accept `null` value, and we can't think in pre-C# 8.0 way that reference types can be nullable.
+
+Depending on the VS version and target framework you use, you might need to add `<Nullable>enable</Nullable>` in your .csproj file:
 ```C#
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.0</TargetFramework>
+    <LangVersion>8.0</LangVersion>
+    <Nullable>enable</Nullable>  // <------------------
+  </PropertyGroup>
+</Project>
+```
+
+
+Let's say we have the following code without Nullable function turning on using C# 8.0 or above:
+```C#
+// C# 8.0
 static void Main(string[] args) {
    string name = Test(0);
    name.ToString();
@@ -361,7 +378,7 @@ Now let's turn on the nullable reference type function in csproj file:
 <Nullable>enable</Nullable>
 ```
 
-When we turn this feature on, C# compiler will treat all reference types non-nullable by defaulty. So there will be warning in 
+When we turn this feature on, C# compiler will treat all reference types non-nullable by default. So there will be warning in 
 ```C#
 // 1st warning
 static string Test(int i) {  // <--- compiler CS8600 warning "Converting null literal or possible null value to non-nullable type (string name)"
@@ -403,6 +420,43 @@ static void Main(string[] args) {
    Console.WriteLine(name!.ToString());          
 }
 ```
+
+Something interesting:
+```C#
+string a = null;     // warning
+string b = null!;    // ok, forcely assign null to b
+string c = default!; // ok, forcely assign null to c
+```
+You might wonder why you want to forcely assign `null` to a non-nullable reference type. Assigning `null!` effectively says "I know this should never be null, but guess what, I'm doing it anyway". But why do you do that? well, the only reason to do it would be because you know you're going to assign a non-null value before any other code could get a `NullReferenceException`, so you want to signal or other developers (pull request code review, peer progamming etc, or even yourself when you forgot what you wrote is for after a long time) that you haven't forgotten to assign it. So now you don't need to worry about what initial value you need to assign to a non-nullable
+
+The case of `var` type:
+
+When nullable reference types are enabled, the compiler always consider the type is nullable:
+
+```C#
+var str = "hello";
+// equivalent to
+string str? = "hello";
+```
+
+This choice was made to avoid lots of compilation warnings when enabling nullable reference types and identity potential null. Think about the following case:
+
+```C#
+var str = "hello";
+_ = str.Length; 
+
+str = null; // compiler would produce an warning if str was `string` instead of `string?`, getting one extra warning
+// ...
+```
+
+
+
+
+
+
+
+
+
 
 
 <!-- <code>&lt;T&gt;</code> -->

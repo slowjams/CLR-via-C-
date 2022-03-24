@@ -1,7 +1,6 @@
 Chapter 27-Compute-Bound Asynchronous Operations
 ==============================
 
-
 ## Performing a Simple Compute-Bound Operation
 
 To queue an asynchronous compute-bound operation to the thread pool, you typically call one of the following methods defined by the `ThreadPool` class:
@@ -376,6 +375,10 @@ public class Task : IThreadPoolWorkItem, IAsyncResult, IDisposable {
    public void Start();
    // There is no public void Start(object state) like Thread's Start(object parameter)
    public void Start(TaskScheduler scheduler);
+
+   public static YieldAwaitable Yield() {   // <---------- see Chapter 28 for its usage
+      return default;
+   }
 }
 ```
 Insteadof calling ThreadPool's QueueUserWorkItem method, you can do the same via tasks:
@@ -676,16 +679,16 @@ public enum TaskContinuationOptions {
    // a little bit complicated, check the details below
    LazyCancellation = 0x0020,
 
-   // This flag indicates that you want the thread that executed the first task to also execute the ContinueWith task.
-   // If the first task has already completed, then the thread calling ContinueWith will execute the ContinueWith task.
+   // this flag indicates that you want the thread that executed the first task to also execute the ContinueWith task.
+   // if the first task has already completed, then the thread calling ContinueWith will execute the ContinueWith task.
    ExecuteSynchronously = 0x80000,
 
-    // These flags indicate under what circumstances to run the ContinueWith task
+    // these flags indicate under what circumstances to run the ContinueWith task
     NotOnRanToCompletion = 0x10000,
     NotOnFaulted = 0x20000,
     NotOnCanceled = 0x40000,
 
-    // These flags are convenient combinations of the above three flags
+    // these flags are convenient combinations of the above three flags
     OnlyOnCanceled = NotOnRanToCompletion | NotOnFaulted,
     OnlyOnFaulted = NotOnRanToCompletion | NotOnCanceled,
     OnlyOnRanToCompletion = NotOnFaulted | NotOnCanceled,
