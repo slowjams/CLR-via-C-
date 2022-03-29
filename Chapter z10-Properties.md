@@ -343,6 +343,94 @@ t.Item1, t.Item2, t.Item3, t.Item4, t.Item5, t.Item6, t.Item7,
 t.Rest.Item1.Item1, t.Rest.Item1.Item2);   // note that the last two are not t.Rest.Item1 or t.Rest.Item2
 ```
 
+Note that `System.Tuple`  were introduced in .NET Framework 4.0 and are classes (whereas the ValueTuple types are structs). Defining tuples as classes was in retrospect considered a mistake: in the typical scenarios in which tuples are used, structs have a slight performance advantage (in that they avoid unnecessary mem‐ory allocations), with almost no downside. Hence, when Microsoft added language support for tuples (in C# 7), it ignored the existing Tuple types in favor of the new `ValueTuple`. You might still come across the Tuple classes in code written prior to C# 7.
+
+so after C# 7, we don't need static method to create a tuple, so we can do like:
+```C#
+var bob = ("Bob", 23);
+
+static (int row, int column) GetFilePosition() => (3, 10);
+
+// syntactic sugar for using the System.ValueTuple<...> generic, in this example, `System.ValueTuple<string, int>`
+var tuple = (name:"Bob", age:23);
+```
+
+`System.ValueTuple` source code:
+```C#
+// contains no member
+public struct ValueTuple : : IEquatable<ValueTuple>, IStructuralEquatable, IStructuralComparable, IComparable, IComparable<ValueTuple>, IValueTupleInternal, ITuple
+{
+   public bool Equals(ValueTuple other) {
+       return true;
+   }
+
+   bool IStructuralEquatable.Equals(object? other, IEqualityComparer comparer) {
+       return other is ValueTuple;
+   }
+
+   public int CompareTo(ValueTuple other) {
+       return 0;
+   }
+
+   int IComparable.CompareTo(object? other) {
+      if (other is null) return 1;
+
+      if (other is not ValueTuple) {
+         ThrowHelper.ThrowArgumentException_TupleIncorrectType(this);
+      }
+
+      return 0;
+   }
+
+   int ITuple.Length => 0;
+
+   public override int GetHashCode() {
+       return 0;
+   }
+
+   public override string ToString() {
+      return "()";
+   }
+
+   // ...
+
+   public static ValueTuple Create() => default;
+
+   public static ValueTuple<T1> Create<T1>(T1 item1) => new ValueTuple<T1>(item1);
+
+   public static ValueTuple<T1, T2> Create<T1, T2>(T1 item1, T2 item2) => new ValueTuple<T1, T2>(item1, item2);
+   // ...
+   public static ValueTuple<T1, T2, T3, T4, T5, T6, T7> Create<T1, T2, T3, T4, T5, T6, T7>(T1 item1, T2 item2, T3 item3, T4 item4, T5 item5, T6 item6, T7 item7) =>
+      new ValueTuple<T1, T2, T3, T4, T5, T6, T7>(item1, item2, item3, item4, item5, item6, item7);
+   
+   public static ValueTuple<T1, T2, T3, T4, T5, T6, T7, ValueTuple<T8>> Create<T1, T2, ..., T7, T8>(T1 item1, T2 item2, ... T7 item7, T8 item8) =>
+      new ValueTuple<T1, T2, T3, T4, T5, T6, T7, ValueTuple<T8>>(item1, item2, item3, item4, item5, item6, item7, ValueTuple.Create(item8));
+}
+
+public struct ValueTuple<T1, T2> : IEquatable<ValueTuple<T1, T2>>, IStructuralEquatable, IComparable, IComparable<ValueTuple<T1, T2>>, ITuple ...
+{
+   public T1 Item1;
+
+   public T2 Item2;
+
+   public ValueTuple(T1 item1, T2 item2) {
+      Item1 = item1;
+      Item2 = item2;
+   }
+
+   public bool Equals(ValueTuple<T1, T2> other) {
+      return EqualityComparer<T1>.Default.Equals(Item1, other.Item1) && EqualityComparer<T2>.Default.Equals(Item2, other.Item2);
+   }
+
+   // ...
+}
+```
+Since `System.ValueTuple` contains no member, so it can only have one possible value, as such, any instance of `System.ValueTuple` is equivalent to any other and, therefore, carries no information., and it can be called "Unit" to represent "void"-alike return value. Technically, void and Unit differ in that:
+
+* void is a type that represents an empty set; as such, it's not possible to create an instance of it
+
+* Unit represents a set with a single value; as such, any instance of Unit is equivalent to any other and, therefore, carries no information
+
 <style type="text/css">
 .markdown-body {
   max-width: 1800px;

@@ -92,7 +92,7 @@ All of the structures are immediately derived from the `System.ValueType` abstra
 class Program {
    static void Main(string[] args) {
 
-      SomeVal v1 = new SomeVal();   // Allocated on stack, even though the new keyword is used
+      SomeVal v1 = new SomeVal();   // allocated on stack, even though the new keyword is used
 
       // These two lines compile because C# thinks that v1's fields have been initialized to 0.
       SomeVal v1 = new SomeVal();
