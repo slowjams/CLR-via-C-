@@ -335,11 +335,9 @@ public async Task Method1Async() {
 }
 
 public async Task Method2Async() {
-
    for (int i = 0; i < 1000; i++) {   // <-------------- current thread will still be blocked
       // do sth time consuming
    }
-
    await XXXAsync();
 }
 ```
@@ -351,6 +349,22 @@ public async Task Method1Async() {
    await Method2Async();
 }
 ```
+so next time when you see an async method wrapper another async method like:
+```C#
+public async Task MethodXXX() {
+   await MethodYYY();
+}
+```
+thenyou should pay attention to it and consider to use `Task.Yield()`:
+```C#
+public async Task MethodXXX() {
+   await Task.Yield();
+   await MethodYYY();
+}
+```
+especailly when the first couple line of `MethodYYY` is compute intensive.
+
+`YieldAwaitable` realated code:
 ```C#
 public class Task : IAsyncResult, IDisposable {
    // ...

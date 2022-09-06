@@ -375,10 +375,16 @@ public static void Main() {
 ```C#
 // System.Object
 public class Object {
-   ...
+   //...
    public static bool Equals(Object objA, Object objB);
+   
    public static bool ReferenceEquals(Object objA, Object objB);
-   public virtual bool Equals(Object obj);
+  
+   public virtual bool Equals(Object obj)
+   {
+     return this == obj;
+   }
+
    public virtual int GetHashCode();
    ...
    
