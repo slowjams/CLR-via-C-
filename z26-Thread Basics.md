@@ -1,6 +1,39 @@
 Chapter 26-Thread Basics
 ==============================
 
+Source Code:
+
+```C#
+public sealed class Thread : CriticalFinalizerObject
+{
+   internal SynchronizationContext _synchronizationContext; // <---------------will be covered in next chapter
+
+   public Thread(ParameterizedThreadStart start);
+   public Thread(ThreadStart start);
+   public Thread(ParameterizedThreadStart start, int maxStackSize);
+   public Thread(ThreadStart start, int maxStackSize);
+   ~Thread();
+
+   public static IPrincipal CurrentPrincipal { get; set; }
+   public static Thread CurrentThread { get; }
+   public CultureInfo CurrentCulture { get; set; }
+   public CultureInfo CurrentUICulture { get; set; }
+   public bool IsAlive { get; }
+   public bool IsBackground { get; set; }
+   public bool IsThreadPoolThread { get; }
+   public int ManagedThreadId { get; }
+   public string Name { get; set; }
+   public ExecutionContext ExecutionContext { get; }
+   public ThreadPriority Priority { get; set; }
+   public ThreadState ThreadState { get; }
+   
+   public void Join();
+   public void Start();
+
+   // ...
+}
+```
+
 ## Internals of Windows Thread
 
 There are three basic components of Windows thread:

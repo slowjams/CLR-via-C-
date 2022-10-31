@@ -186,11 +186,10 @@ internal sealed class ArrayEnumerator<T> : IEnumerator<T> {
 }
 ```
 
-## Generic Delegates
-To Work Later After Chapter 17
 
 ## Interface and Delegate Contra-variant and Covariant Generic Type Arguments
-Each of an interface/delegate's generic type parameters can be marked as covariant or contra-variant. This feature allows you to cast a variable of a generic interface/delegate type to the same interface/delegate type where the generic parameter types differ. Covariance and contravariance are collectively referred to as *variance*. A generic type parameter can be any one of the following:
+
+Each of an interface/delegate's generic type parameters can be marked as *covariant* or *contra-variant*. This feature allows you to cast a variable of a generic interface/delegate type to the same interface/delegate type where the generic parameter types differ. Covariance and contravariance are collectively referred to as *variance*. A generic type parameter can be any one of the following:
 <ul>
   <li><b>Invariant</b> Meaning that the generic type parameter cannot be changed. (This is the default when you are not using in/out keyword)</li>
   <li><b>Covariant</b> In C#, you indicate covariant generic type parameters with the <code>out</code> keyword, meaning that the generic type argument can change from a class to one of its base classes. </li>
@@ -201,7 +200,7 @@ Each of an interface/delegate's generic type parameters can be marked as covaria
     Variance applies only to reference types, if you specify a value type for a variant type parameter, that type parameter is invariant for the resulting constructed type.
 </div>
 
-For example, let’s say that the following delegate type definition exists (which, by the way, it does):
+For example, let's say that the following delegate type definition exists (which, by the way, it does):
 ```C#
 public delegate TResult Func<in T, out TResult>(T arg);
 ```
@@ -269,7 +268,7 @@ AnimalWalker<Animal> animalWalker = new AnimalWalker<Animal>();
 AnimalWalker<Dog> dogWalker = animalWalker; 
 dogWalker.walk(new Dog()); 
 ```
-You might think contra-variance means casting a base type to derived type, which doesn't make sense in the beginning, but when you look at the code, you will realize that contra-variance really invert/reverse the casting flow from "base type to derived type" back to "derived type to base type" in the interface's method, that's why `in` keyword is choose to represent contra-variance (type parameter used as an input of the interface's method, and that's why contra-variant generic type parameters can appear only in input positions such as a method's argument as mentioned before).
+You might think contra-variance means casting a base type to derived type, which doesn't make sense in the beginning, but when you look at the code, you will realize that contra-variance really invert/reverse the casting flow from "base type to derived type" back to "derived type to base type" in the interface's method, that's why `in` keyword (input as context meaning) is choose to represent contra-variance (type parameter used as an input of the interface's method, and that's why contra-variant generic type parameters can appear only in input positions such as a method's argument as mentioned before).
 
 Below is a concrete code example to demostrate the use of contra-variance:
 ```C#

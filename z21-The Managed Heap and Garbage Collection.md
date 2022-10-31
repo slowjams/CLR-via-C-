@@ -1536,6 +1536,8 @@ static class GCWatcher {
 }
 ```
 
+Revisit:
+https://stackoverflow.com/questions/18465630/understanding-conditionalweaktable
 <!-- ![alt text](./zImages/16-1.png "Title") -->
 
 <!-- [link text](https://) -->

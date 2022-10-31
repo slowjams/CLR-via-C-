@@ -343,7 +343,7 @@ t.Item1, t.Item2, t.Item3, t.Item4, t.Item5, t.Item6, t.Item7,
 t.Rest.Item1.Item1, t.Rest.Item1.Item2);   // note that the last two are not t.Rest.Item1 or t.Rest.Item2
 ```
 
-Note that `System.Tuple`  were introduced in .NET Framework 4.0 and are classes (whereas the ValueTuple types are structs). Defining tuples as classes was in retrospect considered a mistake: in the typical scenarios in which tuples are used, structs have a slight performance advantage (in that they avoid unnecessary mem‐ory allocations), with almost no downside. Hence, when Microsoft added language support for tuples (in C# 7), it ignored the existing Tuple types in favor of the new `ValueTuple`. You might still come across the Tuple classes in code written prior to C# 7.
+Note that `System.Tuple`  were introduced in .NET Framework 4.0 and are classes (whereas the `ValueTuple` types are structs). Defining tuples as classes was in retrospect considered a mistake: in the typical scenarios in which tuples are used, structs have a slight performance advantage (in that they avoid unnecessary mem‐ory allocations), with almost no downside. Hence, when Microsoft added language support for tuples (in C# 7), it ignored the existing `Tuple` types in favor of the new `ValueTuple`. You might still come across the old `Tuple` classes shown above in code written prior to C# 7.
 
 so after C# 7, we don't need static method to create a tuple, so we can do like:
 ```C#
@@ -358,7 +358,7 @@ var tuple = (name:"Bob", age:23);
 `System.ValueTuple` source code:
 ```C#
 // contains no member
-public struct ValueTuple : : IEquatable<ValueTuple>, IStructuralEquatable, IStructuralComparable, IComparable, IComparable<ValueTuple>, IValueTupleInternal, ITuple
+public struct ValueTuple : IEquatable<ValueTuple>, IStructuralEquatable, IStructuralComparable, IComparable, IComparable<ValueTuple>, IValueTupleInternal, ITuple
 {
    public bool Equals(ValueTuple other) {
        return true;

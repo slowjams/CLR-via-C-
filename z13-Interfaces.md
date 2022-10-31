@@ -338,7 +338,7 @@ Now the output will be the following: "public Dispose /n IDisposable Dispose".
 
 In C#, when you prefix the name of a method with the name of the interface that defines the method (IDisposable.Dispose as in this example), you are creating an **explicit interface method implementation (EIMI)**. Note that when you define an explicit interface method in C#, you are not allowed to specify any accessibility (such as public or private). However, when the compiler generates the metadata for the method, **its accessibility is set to private**, preventing any code using an instance of the class from simply calling the interface method. The only way to call the interface method is through a variable of the interface's type.
 
-Also note that an EIMI method cannot be marked as virtual and therefore cannot be overridden. This is because the EIMI method is not really part of the type’s object model; it’s a way of attaching an interface (set of behaviors or methods) onto a type without making the behaviors/methods obvious. 
+Also note that an EIMI method cannot be marked as virtual and therefore cannot be overridden. This is because the EIMI method is not really part of the type's object model; it's a way of attaching an interface (set of behaviors or methods) onto a type without making the behaviors/methods obvious. 
 
 Below is one more example that uses EIMI:
 ```C#

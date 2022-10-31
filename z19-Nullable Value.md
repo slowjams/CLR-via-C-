@@ -344,6 +344,15 @@ Int32 result = ((IComparable) (Int32) n).CompareTo(5); // Cumbersome
 Prior to C# 8.0, all reference types were nullable. Start from C# 8.0, **everything is non-nullable by default** (The `null` literal type is the only type that is nullable by default), so reference types is like structs now (structs can't be null).
 So from C# 8.0, we need to explicit make a reference type nullable if we need it accept `null` value, and we can't think in pre-C# 8.0 way that reference types can be nullable.
 
+The ability of making reference type nullable (well, reference type can be null actually, we make it non-nullable in code analysis level, not CLR level) solve a problem of this:
+```C#
+public void SomeMethod<T>(T? value) { ... }
+
+// before C# 8.0, nullable only makes senses for structs type, and you don't know if the T is struct or class at compile time, what if T is class? what does class can be null when 
+// it is design to be allowed for null?
+```
+You can see that by assuming class is non-nullable by default can unify the usage of `?`.
+
 Depending on the VS version and target framework you use, you might need to add `<Nullable>enable</Nullable>` in your .csproj file:
 ```C#
 <Project Sdk="Microsoft.NET.Sdk">
@@ -420,6 +429,27 @@ static void Main(string[] args) {
    Console.WriteLine(name!.ToString());          
 }
 ```
+
+There are also a range of attributes you can use to inform compilier, for example:
+```C#
+static void ThrowIfNull([NotNull] string? x)
+{
+    if (x == null)
+    {
+        throw new ArgumentNullException();
+    }
+}
+```
+`NotNull` attributes tell the compiler that "if this method return then `x` won't be null, which can be considered when the caller who calls this method, `NotNull` itself is not about callee, otherwise it would be weird to say `x` is nullable (because of `?`) and also say `x` is not null (`[NotNull]` before it), it is about caller. For example:
+```C#
+static void Caller()
+{
+   string? str = GetString();
+   ThrowIfNull(str);
+   Console.WriteLine(str.ToUpper());   // compiler warning that .ToUpper() is a possible NRE if you do NOT use [NotNull] in the callee's parameter
+}
+```
+
 
 Something interesting:
 ```C#

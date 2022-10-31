@@ -244,6 +244,7 @@ if (Enum.IsDefined(typeof(Color), c) {
 }
 ```
 
+
 ## Bit Flags
 
 If you eant an enumeration type to represent a combination of choices, define enum members for those choices such that an individual choice is a bit field. That is, the associated values of those enum members should be the powers of two. Then, you can use the bitwise logical operators | or & to combine choices or intersect combinations of choices, respectively. To indicate that an enumeration type declares bit fields, apply the `Flags` attribute to it. As the following example shows, you can also include some typical combinations in the definition of an enumeration type:

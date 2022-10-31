@@ -324,73 +324,25 @@ private void SomeMethod() {
    try { ... }
    catch (Exception e) {
       ...
-      throw e;   // CLR resets the stack trace and thinks this is where exception originated.
+      throw e;   // CLR thinks this is where exception originated.
                  // FxCop reports this as an error
    }
 }
 ```
-In contrast, if you re-throw an exception object by using the `throw` keyword by itself, the CLR doesn't reset the stack's starting point. The following code re-throws the same exception object that it caught, causing the CLR to not reset its starting point for the exception:
+In contrast, if you re-throw an exception object by using the `throw` keyword by itself, the CLR doesn't reset the stack's starting point.T he following code re-throws the same exception object that it caught, causing the CLR to not reset its starting point for the exception:
 ```C#
 private void SomeMethod() {
    try { ... }
    catch (Exception e) {
       ...
-      throw;   // CLR doesn't resets the stack trace, this has no effect on where the CLR thinks the exception originated.
+      throw;   // This has no effect on where the CLR thinks the exception originated.
                // FxCop does NOT report this as an error
    }
 }
 ```
-
-An concrete example:
-
-```C#
-static void Main(string[] args)
-{
-    try
-    {
-        Method1();     // line 11
-    }
-    catch (Exception ex)
-    {
-        Console.Write(ex.StackTrace.ToString());
-        Console.ReadKey();
-    }
-}
-
-private static void Method1()
-{
-    try
-    {
-        Method2();
-    }
-    catch (Exception ex)
-    {
-        //throw ex resets the stack trace Coming from Method 2 and propogates it to the caller(Main)
-        throw ex;     // line 29
-    }
-}
-
-private static void Method2()
-{
-    try
-    {
-        throw new Exception("Inside Method2");
-    }   
-    catch (Exception ex)
-    {
-        throw;
-    }
-}
-
-/* Console Output
- at ConsoleApp2.Program.Method1() in C:\LocalRepositories\zOthers\ConsoleApp2\ConsoleApp2\Program.cs:line 29
- at ConsoleApp2.Program.Main(String[] args) in C:\LocalRepositories\zOthers\ConsoleApp2\ConsoleApp2\Program.cs:line 11
-*/
-```
-
 In fact, the only difference between these two code fragments is what the CLR thinks is the original location where the exception was thrown. Unfortunately, when you throw or re-throw an exception, Windows does reset the stack's starting point. So if the exception becomes unhandled, the stack location that gets reported to Windows Error Reporting is the location of the last throw or re-thrown, even though the CLR knows the stack location where the original exception was thrwon. This is unfortunate because it makes debugging applications that have failed in the field much more difficult. 
 
-The string returned from the `StackTrace` property doesn't include any of the methods in the call stack that are above the point where the catch block accepted the exception object. If you want the complete stack trace from the start of the thread up to the exception handler, you can use the `System.Diagnostics StackTrace` type. This type defines some properties and methods that allow a developer to programmatically manipulate a stack trace and the frames that make up the stack trace.
+The strin returned from the `StackTrace` property doesn't include any of the methods in the call stack that are above the point where the catch block accepted the exception object. If you want the complete stack trace from the start of the thread up to the exception handler, you can use the `System.Diagnostics StackTrace` type. This type defines some properties and methods that allow a developer to programmatically manipulate a stack trace and the frames that make up the stack trace.
 
 ## FCL-Defined Exception Classes
 

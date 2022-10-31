@@ -8,7 +8,7 @@ Any data types the compiler directly supports are called primitive types. Primit
 
 | Primitive Type | FCL Type | Description |
 | -------------- | -------- | ----------- |
-| sbyte | System.SByte | Signed 8-bit value |
+| sbyte| System.SByte | Signed 8-bit value |
 | byte | System.Byte  | Unsigned 8-bit value |
 | short | System.Int16  | Signed 16-bit value |
 | int | System.Int32 | Signed 32-bit value |
@@ -101,6 +101,10 @@ class Program {
       // These two lines don't compile because C# doesn't think that v1's fields have been initialized to 0.
       SomeVal v1;
       Int32 a = v1.x; // error CS0170: Use of possibly unassigned field 'x'
+
+      // These two lines compile because you assign the value 
+      SomeVal v1;  // <----------also note that compilier will call struct's implicit parameterless constructor, so it is like `SomeVal v1 = new SomeVal()`
+      v1.x = 2012;
    }
 }
 
@@ -229,7 +233,7 @@ The code at the bottom of this fragment is intended only to change Point’s x f
 managed heap). Hopefully, you see the <span style="color:red">impact</span> that boxing and unboxing/copying operations have on your application’s performance.
 
 <div class="alert alert-info p-1" role="alert">
-    If you’re the least bit concerned about your application's performance, uses tools such as ILDasm.exe to view the IL code for methods and see where the box IL instructions are.
+    If you're the least bit concerned about your application's performance, uses tools such as ILDasm.exe to view the IL code for methods and see where the box IL instructions are.
 </div>
 
 Below is an example that shows you need to have a deep understanding on boxing/unboxing to know that <b>three</b> boxing operations occur:
@@ -337,7 +341,7 @@ internal interface IChangeBoxedPoint { void Change(Int32 x, Int32 y); }
 
 internal struct Point : IChangeBoxedPoint {
     ... //same as above
-   public void Change(Int32 x, Int32 y) {
+   public void Change(Int32 x, Int32 y) {  // this is just for demo of potential problem underlying, you should not define a method to change values of struct's member
       m_x = x; m_y = y;
    }
 }
@@ -376,27 +380,50 @@ public static void Main() {
 // System.Object
 public class Object {
    //...
-   public static bool Equals(Object objA, Object objB);
-   
-   public static bool ReferenceEquals(Object objA, Object objB);
-  
-   public virtual bool Equals(Object obj)
-   {
-     return this == obj;
+   public static bool Equals(Object objA, Object objB)  // so static `Object.Equals(instanceA, instanceB)` is just extra null check on top of instanceA.Equals(instanceB)
+   {                                                    // and because you can override Equals method in derived type, so it might not do the reference check
+      if (objA == objB) 
+         return true;
+
+      if (objA == null || y == null) 
+         return false;
+
+      return objA.Equals(objB);
    }
 
-   public virtual int GetHashCode();
-   ...
-   
-   // Hardcoded and purely supported by compiler
-   //public static bool operator ==(object x, object y);
-   //public static bool operator !=(object x, object y);
+   public virtual bool Equals(Object obj)
+   {
+      return this == obj;
+   }
+
+   public static bool ReferenceEquals(Object objA, Object objB)
+   {
+      return objA == objB;
+   }
+
+   public virtual int GetHashCode() {
+      // most developers think the default implementation hash value is computed based on the object's address in memory, which is not true
+      // the reason why .NET can't do this is because of the garbage collector that can move object. The default implementation for GetHashCode
+      // is related to pseudo number generating, which we don't really need to know the details
+   }
+    
+   // purely supported by compiler
+   public static bool operator ==(object x, object y)  // only check reference, doesn't call instance Equals method, same as ReferenceEquals
+   {                                                   // why we still have it when we already have ReferenceEquals? because we can overload == operator in the derived type,
+      // C++ low level code                            // it is inconvenient to do `(object)instanceA == (object)instanceB` compared to Object.ReferenceEquals(instanceA, instanceB)
+   }
+
+   // purely supported by compiler
+   public static bool operator !=(object x, object y)
+   {
+      // C++ low level code 
+   }
 }
 ```
 
 1-`System.Object`s virtual method `Equals` returns true if two references points to a same object by default
 
-2-The static method `Object.Equals` is designed to avoid NullReferenceException e.g `Console.WriteLine(object.Equals(p1,p2));` instead of `Console.WriteLine(p1.Equals(p2)); // where p1 might be null`, the implemention is
+2-The static method `Object.Equals` is designed to avoid NullReferenceException e.g `Console.WriteLine(object.Equals(p1,p2));` instead of `Console.WriteLine(p1.Equals(p2))`  where p1 might be null and then throws an exception, the implemention is
 
 ```C#
 public static bool Equals(object x, object y) {
@@ -421,23 +448,23 @@ public static bool ReferenceEquals (Object objA, Object objB) {
 
 4- The `==` and `!=` doesn't exist in the the source code https://referencesource.microsoft.com/#mscorlib/system/object.cs, that's why I comment them out. They are purely supported by the compiler, so their implemention details is hard coded. Note that `==` and `!=` in `Object` checks references, they don't call `Object`'s  instance `Equals` method for polymorphic (they probably do call `ReferenceEquals` internally but it is just an implemention details), so they are not polymorphic and don't call anything polymorphic by default and you can't override them in your derived type (all types implicitly inherits from `Object`), but you can overload them as `String` does.
 
-For `System.ValueType` (the base class of all value types), it overrides Object's Equals method. Internally, ValueType’s Equals is implemented this way:
+For `System.ValueType` (the base class of all value types), it overrides Object's Equals method. Internally, ValueType's Equals is implemented this way:
 
 1. If the obj argument is null, return false.
 
 2. If the this and obj arguments refer to objects of different types, return false.
 
-3. For each instance field defined by the type, compare the value in the this object with the value in the obj object by calling the field’s Equals method. If any fields are not equal, return false.
+3. For each instance field defined by the type, compare the value in the this object with the value in the obj object by calling the field's Equals method. If any fields are not equal, return false.
 
 4. Return true. Object's Equals method is not called by ValueType’s Equals method.
 
-Internally, ValueType’s Equals method uses reflection (covered in Chapter 23, "Assembly Loading and Reflection") to accomplish step 3. Because the CLR’s reflection mechanism is slow, when defining your own value type, you should override Equals and provide your own implementation to improve the performance of value equality comparisons that use instances of your type. Of course, in your own implementation, do not call base.Equals.
+Internally, ValueType's Equals method uses reflection (covered in Chapter 23, "Assembly Loading and Reflection") to accomplish step 3. Because the CLR's reflection mechanism is slow, when defining your own value type, you should override Equals and provide your own implementation to improve the performance of value equality comparisons that use instances of your type. Of course, in your own implementation, do not call base.Equals.
 
-When overriding the Equals method, there are a couple more things that you’ll probably want to do:
+When overriding the Equals method, there are a couple more things that you'll probably want to do:
 
 0.  Override the `GetHashCode` method as it will be needed when using Dictionary to hash key object
 
-1. Have the type implement the `System.IEquatable<T>.Equals` method, the type's virtul `bool Equals(Object obj)` will call this type-safe method internally.
+1. Have the type implement the `System.IEquatable<T>.Equals` method, the type's virtul `bool Equals(Object obj)` should call this type-safe method internally.
 
 2. Overload the == and != operator methods
 
@@ -466,7 +493,7 @@ public class Person : IEquatable<Person> {
   
    }
 
-   public override bool Equals(Object obj) {    //In case non generic data structure is used  e.g  ArrayList
+   public override bool Equals(Object obj) {    // in case non generic data structure is used  e.g  ArrayList
       if (obj == null)
          return false;
       Person personObj = obj as Person;
@@ -485,7 +512,7 @@ public class Person : IEquatable<Person> {
    //public static bool operator != (Person person1, Person person2) ...
 }
 ```
-so when using generic data structures e.g `List.Contains(T item)` or `List.Remove(T item)` method, CLR will call your type's type safe `Equals(T other)` method, if your type doesn't implement `IEquatable<T>` then normal `Equals(Object obj)` is called. Also notes that you should overload the ==, !=.
+so when using generic data structures e.g `List.Contains(T item)` or `List.Remove(T item)` method, CLR will call your type's type safe `Equals(T other)` method, if your type doesn't implement `IEquatable<T>` then normal `Equals(Object obj)` is called. **Also notes that you should overload the ==, !=**.
 
 <div class="alert alert-info p-1" role="alert">
     You can see that there is no existance of non-generic version of <code>IEquatable</code>, unlike others such as <code>IComparable&lt;T&gt;</code> and <code>&lt;IComparable&gt;</code> or <code>IComparer&lt;T&gt;</code> and <code>&lt;IComparer&gt;</code> that comes as a "pair". Because non-generic IEquatable is actually the same thing as System.Object's virtual Equals method. For example, the signature of <code>Int32</code> is:
@@ -542,7 +569,8 @@ public class Employee : IComparable<Employee>, IComparable, IEquatable<Employee>
     // public static bool operator XX (Employee e1, Employee e2)  leave out for brevity
 }
 
-public class AgeComparer : IComparer<Employee> {    // should really implement non-generic IComparer, leave out for brevity
+// sometimes we don't want to use default Sorting which uses IComparable, so we use IComparer for our needs
+public class AgeComparer : IComparer<Employee> {    // should also implement non-generic IComparer, leave out for brevity
    public int Compare(Employee employee1, Employee employee2) {
       if (employee1?.Age > employee2?.Age)
          return 1;
@@ -581,17 +609,20 @@ Think of `IComparable` as providing a default sort order for your objects when y
     If your type doesn't implement <code>IComparable</code> and the collection calls <code>Sort()</code>, an exception will be thrown at runtime
 </div>
 
-You can also specify multiple sort orders with `IComparer`, the `IComparable` is more like default comparison, `IComparer` is like new  comparisons that override default comparison. That's why `IComparable` implemented by type classes directly while `IComparer` and `Comparer<T>` implemented by a separate sub-class. 
+You can also specify multiple sort orders with `IComparer`, the `IComparable` is more like default comparison while `IComparer` is alterantive sorting you want to use, `IComparer` is like new comparisons that override default comparison. That's why `IComparable` implemented by type classes directly while `IComparer` and `Comparer<T>` implemented by a separate sub-class. 
 
 ### Abstract Class Comparer<T>
 
 The following code demostrates the usage of `Comparer<T>`:
 
 ```C#
-//note that there is no non-generic Compare abstract class, only generic one exists
+// ------------------------------V
+// note that there is no non-generic Compare abstract class, only generic one exists
+// public delegate int Comparison<in T>(T x, T y);
 public abstract class Comparer<T> : IComparer, IComparer<T> {
    protected Comparer();
-   public static Comparer<T> Default { get; }
+   // check if T implements IComparable<T>` and then turn IComparable<T> logic into Comparer<T>, the return instance overrides the abstract  Compare(T x, T y)
+   public static Comparer<T> Default { get; }  
    public static Comparer<T> Create(Comparison<T> comparison);
    public abstract int Compare(T x, T y);
    public int Compare(Object x, Object y) {             
@@ -599,6 +630,9 @@ public abstract class Comparer<T> : IComparer, IComparer<T> {
       return Compare((T)x, (T)y);
    }
 }
+
+public delegate int Comparison<in T>(T x, T y);
+// ------------------------------Ʌ
 
 public class BoxLengthFirst : Comparer<Box>
 {
@@ -648,7 +682,7 @@ static void Main(string[] args) {
 
    Comparer<Box> defComp = Comparer<Box>.Default;
    // Calling Boxes.Sort() with no parameter is the same as calling Boxs.Sort(defComp)
-   Boxes.Sort();
+   Boxes.Sort(defComp);
 
    // using public static Comparer<T> Create(Comparison<T> comparison);
    Comparer<Box> boxWidthFirst = Comparer<Box>.Create((Box x, Box y) => x.Length - y.Length);  //  just compare length for simplicity
@@ -827,7 +861,7 @@ public class Box : IEquatable<Box> {
    }
 }
 ```
-then you expect the Dictionary won't be able to add any box object to it, but when you run the code, you'll find the Dictionary still adds all box objects into it. The document only just says the second part which involves IEquatable.Equals(). The whole process is:
+then you expect the Dictionary won't be able to add any box object to it (Dictionary throws an exeception when adding TValue to existing used TKey), but when you run the code, you'll find the Dictionary still adds all box objects into it. The document only just says the second part which involves IEquatable.Equals(). The whole process is:
 
 <ul>
   <li>Dictinary always calls GetHashCode of Tkey, to determine which bucket is used to store Tkey</li>

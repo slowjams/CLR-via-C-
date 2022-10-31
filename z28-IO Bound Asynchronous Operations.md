@@ -117,6 +117,7 @@ Since state machine uses `TaskContinuationOptions.ExecuteSynchronously` for defa
 
 When working with async functions, you will be more productive with them if you have an understanding and appreciation for the code transform that the compiler is doing for you, let's look at an example:
 ```C#
+//-------------------------------------------------------------V
 private static async Task<String> MyMethodAsync(Int32 argument) {
    Int32 local = argument;
    try {
@@ -133,6 +134,7 @@ private static async Task<String> MyMethodAsync(Int32 argument) {
    }
    return "Done";
 }
+//-------------------------------------------------------------Ʌ
 
 internal sealed class Type1 { }
 internal sealed class Type2 { }
@@ -149,9 +151,11 @@ I took the preceding code, compiled it, and then reverse engineered the IL code 
 // AsyncStateMachine attribute indicates an async method (good for tools using reflection);
 // the type indicates which structure implements the state machine
 [DebuggerStepThrough, AsyncStateMachine(typeof(StateMachine))]
-private static Task<String> MyMethodAsync(Int32 argument) {
+private static Task<String> MyMethodAsync(Int32 argument)
+{
    // Create state machine instance & initialize it
-   StateMachine stateMachine = new StateMachine() {
+   StateMachine stateMachine = new StateMachine()
+   {
       // Create builder returning Task<String> from this stub method
       // State machine accesses builder to set Task completion/exception
       m_builder = AsyncTaskMethodBuilder<String>.Create(),
@@ -161,16 +165,17 @@ private static Task<String> MyMethodAsync(Int32 argument) {
 
    // Start executing the state machine
    stateMachine.m_builder.Start(ref stateMachine);   // internally call MoveNext to star up
-   
-   //Note that the below code returns state machine's task, not the task return from executing Method1Async or Method2Async as you might expect normally
+
+   // Note that the below code returns state machine's task, not the task return from executing Method1Async or Method2Async as you might expect normally
    // in other common async function , this is important as the state machine will update this "new" task, when everything finishes asynchronously,  
    // m_builder.SetResult get called, which notify the caller this task is completed.                              
-   return stateMachine.m_builder.Task; 
+   return stateMachine.m_builder.Task;
 }
 
 // This is the state machine structure
 [CompilerGenerated, StructLayout(LayoutKind.Auto)]
-private struct StateMachine : IAsyncStateMachine {
+private struct StateMachine : IAsyncStateMachine
+{
    // Fields for state machine's builder (Task) & its location
    public AsyncTaskMethodBuilder<String> m_builder;
    public Int32 m_state;  // is -1 in the beginning
@@ -186,52 +191,56 @@ private struct StateMachine : IAsyncStateMachine {
    private TaskAwaiter<Type2> m_awaiterType2;
 
    // This is the state machine method itself
-   void IAsyncStateMachine.MoveNext() {
+   void IAsyncStateMachine.MoveNext()
+   {
       String result = null; // Task's result value
 
-      // Compiler-inserted try block ensures the state machine’s task completes
-      try {
+      // Compiler-inserted try block ensures the state machine's task completes 
+      try
+      {
          Boolean executeFinally = true; // Assume we're logically leaving the 'try' block
          if (m_state == -1)             // If 1st time in state machine method,
             m_local = m_argument;       // execute start of original method
-      }
 
-      // Try block that we had in our original code
-      try {
-         TaskAwaiter<Type1> awaiterType1;
-         TaskAwaiter<Type2> awaiterType2;
+         // Try block that we had in our original code
+         try
+         {
+            TaskAwaiter<Type1> awaiterType1;
+            TaskAwaiter<Type2> awaiterType2;
 
-         switch (m_state) {
-            case -1: // Start execution of code in 'try'
-               // Call Method1Async and get its awaiter
-               awaiterType1 = Method1Async().GetAwaiter();  // <------------------------- now you see using `await` transforms `await XXX()` to `XXX().GetAwaiter()`
-               if (!awaiterType1.IsCompleted) {
-                  m_state = 0;   // 'Method1Async' is completing asynchronously
-                  m_awaiterType1 = awaiterType1; // Save the awaiter for when we come back
-                  
-                  // Tell awaiter to call MoveNext when operation completes
-                  m_builder.AwaitUnsafeOnCompleted(ref awaiterType1, ref this);
-                  // The line above invokes awaiterType1's OnCompleted which approximately
-                  // calls ContinueWith(t => MoveNext()) on the Task being awaited.
-                  // When the Task completes, the ContinueWith task calls MoveNext
+            switch (m_state)
+            {
+               case -1: // Start execution of code in 'try'
+                        // Call Method1Async and get its awaiter
+                  awaiterType1 = Method1Async().GetAwaiter();  // <--------------------------------- now you see using `await` transforms `await XXX()` to `XXX().GetAwaiter()`
+                  if (!awaiterType1.IsCompleted)
+                  {
+                     m_state = 0;   // 'Method1Async' is completing asynchronously
+                     m_awaiterType1 = awaiterType1; // Save the awaiter for when we come back
 
-                  executeFinally = false; // We're not logically leaving the 'try' block
-                  return;   // <--------------------------Thread returns to caller(MyMethodAsync), then caller execute `return stateMachine.m_builder.Task;`, this is important
-               }
-               // 'Method1Async' completed synchronously
-               break;
+                     // Tell awaiter to call MoveNext when operation completes
+                     m_builder.AwaitUnsafeOnCompleted(ref awaiterType1, ref this);
+                     // The line above invokes awaiterType1's OnCompleted which approximately
+                     // calls ContinueWith(t => MoveNext()) on the Task being awaited.
+                     // When the Task completes, the ContinueWith task calls MoveNext
 
-            case 0: // 'Method1Async' completed asynchronously
-               awaiterType1 = m_awaiterType1; // Restore most-recent awaiter
-               break;
-            
-            case 1: // 'Method2Async' completed asynchronously
-               awaiterType2 = m_awaiterType2; // Restore most-recent awaiter
-               goto ForLoopEpilog;
-         }
+                     executeFinally = false; // We're not logically leaving the 'try' block
+                     return;   // <--------------------------Thread returns to caller(MyMethodAsync), then caller execute `return stateMachine.m_builder.Task;`, this is important
+                  }
+                  // 'Method1Async' completed synchronously
+                  break;
 
-         // After the first await, we capture the result & start the 'for' loop
-         m_resultType1 = awaiterType1.GetResult(); // Get awaiter's result
+               case 0: // 'Method1Async' completed asynchronously
+                  awaiterType1 = m_awaiterType1; // Restore most-recent awaiter
+                  break;
+
+               case 1: // 'Method2Async' completed asynchronously
+                  awaiterType2 = m_awaiterType2; // Restore most-recent awaiter
+                  goto ForLoopEpilog;
+            }
+
+            // After the first await, we capture the result & start the 'for' loop
+            m_resultType1 = awaiterType1.GetResult(); // Get awaiter's result
 
          ForLoopPrologue:
             m_x = 0;          // 'for' loop initialization
@@ -240,13 +249,15 @@ private struct StateMachine : IAsyncStateMachine {
          ForLoopEpilog:
             m_resultType2 = awaiterType2.GetResult();
             m_x++;   // Increment x after each loop iteration
-            // Fall into the 'for' loop’s body
+                     // Fall into the 'for' loop’s body
 
          ForLoopBody:
-            if (m_x < 3) {   // 'for' loop test
-               // Call Method2Async and get its awaiter
+            if (m_x < 3)
+            {   // 'for' loop test
+                // Call Method2Async and get its awaiter
                awaiterType2 = Method2Async().GetAwaiter();
-               if (!awaiterType2.IsCompleted) {
+               if (!awaiterType2.IsCompleted)
+               {
                   m_state = 1; // 'Method2Async' is completing asynchronously
                   m_awaiterType2 = awaiterType2; // Save the awaiter for when we come back
 
@@ -258,27 +269,32 @@ private struct StateMachine : IAsyncStateMachine {
                // 'Method2Async' completed synchronously
                goto ForLoopEpilog; // Completed synchronously, loop around
             }
-      }
-      catch (Exception) {
-         Console.WriteLine("Catch");
-      }
-      finally {
-         // Whenever a thread physically leaves a 'try', the 'finally' executes
-         // We only want to execute this code when the thread logically leaves the 'try'
-         if (executeFinally) {
-            Console.WriteLine("Finally");
          }
-      }
-      result = "Done"; // What we ultimately want to return from the async function
-   }
-   catch (Exception exception) {
-      // Unhandled exception: complete state machine's Task with exception
-      m_builder.SetException(exception);
-      return;
-   }
-   // No exception: complete state machine's Task with result
-   m_builder.SetResult(result);  // <-----------set the status of stateMachine.m_builder.Task to RanToCompletion so the caller of MyMethodAsync knows the task it gets is completed
+         catch (Exception)
+         {
+            Console.WriteLine("Catch");
+         }
 
+         finally
+         {
+            // Whenever a thread physically leaves a 'try', the 'finally' executes
+            // We only want to execute this code when the thread logically leaves the 'try'
+            if (executeFinally)
+            {
+               Console.WriteLine("Finally");
+            }
+         }
+         result = "Done"; // note that original code is `return "Done";`, but in here,  "return" is stripped/removed, because we want m_builder.SetResult to be called eventually
+      }                   // this is important because your async code could have synchronous paths which return a value immediately, check `ValueTask` for details
+      catch (Exception exception)
+      {
+         // Unhandled exception: complete state machine's Task with exception
+         m_builder.SetException(exception);
+         return;
+      }
+      // No exception: complete state machine's Task with result
+      m_builder.SetResult(result);  // <------set the status of stateMachine.m_builder.Task to RanToCompletion so the caller of MyMethodAsync knows the task it gets is completed
+   }
 }
 
 // You can see TaskAwaiter is a wrapper of Task, just like Enumerator
@@ -335,9 +351,11 @@ public async Task Method1Async() {
 }
 
 public async Task Method2Async() {
+
    for (int i = 0; i < 1000; i++) {   // <-------------- current thread will still be blocked
       // do sth time consuming
    }
+
    await XXXAsync();
 }
 ```
@@ -349,22 +367,6 @@ public async Task Method1Async() {
    await Method2Async();
 }
 ```
-so next time when you see an async method wrapper another async method like:
-```C#
-public async Task MethodXXX() {
-   await MethodYYY();
-}
-```
-thenyou should pay attention to it and consider to use `Task.Yield()`:
-```C#
-public async Task MethodXXX() {
-   await Task.Yield();
-   await MethodYYY();
-}
-```
-especailly when the first couple line of `MethodYYY` is compute intensive.
-
-`YieldAwaitable` realated code:
 ```C#
 public class Task : IAsyncResult, IDisposable {
    // ...
@@ -538,14 +540,45 @@ The .NET Framework supports several different kinds of application models, and e
 
 However, GUI applications, including Windows Forms, Windows Presentation Foundation (WPF), Silverlight, and Windows Store apps impose a threading model where the thread that created a UI element is the only thread allowed to update that UI element. It is common for the GUI thread to spawn off an asynchronous operation so that the GUI thread doesn’t block and stop responding to user input like mouse, keystroke, pen, and touch events. However, when the asynchronous operation completes, a thread pool thread completes the Task object resuming the state machine.
 
-For some application models, this is OK and even desired because it's efficient. But for some other application models, like GUI applications, this is a problem, because your code will throw an exception if it tries to update UI elements via a thread pool thread. Somehow, the thread pool thread must have
-the GUI thread update the UI elements.
+For some application models, this is OK and even desired because it's efficient. But for some other application models, like GUI applications, this is a problem, because your code will throw an exception if it tries to update UI elements via a thread pool thread. Somehow, the thread pool thread must have the GUI thread update the UI elements.
+
+You might ask: **why it needs to be UI thread to update UI elements**, this is because Win32 API are old and not thread-safe.
 
 ASP.NET applications allow any thread to do whatever it wants. When a thread pool thread starts to process a client's request, it can assume the client's culture, allowing the web server to return culture-specific fomatting for numbers, dates, and times. In addition, the web server can assume the client’s identity (System.Security.Principal.IPrincipal), so that the server can access only the resources that the client is allowed to access. When a thread pool thread spawns an asynchronous operation, it may be completed by another thread pool thread, which will be processing the result of an asynchronous operation. While this work is being performed on behalf of the original client request, the culture and identity needs to "flow" to the new thread pool thread so any additional work done on behalf of the client is performed using the client's culture and identity information.
 
 Fortunately, the FCL defines a base class, called `System.Threading.SynchronizationContext`, which solves all these problems. Simply stated, a SynchronizationContext-derived object connects an application model to its threading model. The FCL defines several classes derived from SynchronizationContext, but usually you will not deal directly with these classes; in fact, many of them are not publicly exposed or documented. 
 
-For the most part, application developers do not need to know anything about the SynchronizationContext class. When you await a Task, the calling thread's SynchronizationContext object is obtained. When a thread pool thread completes the Task, the SynchronizationContext object is used, ensuring the right theading model for your application model. So, when a GUI thread awaits a Task, the code following the await operator is guaranteed to execute on the GUI thread as well, allowing that code to update UI elements. For an ASP.NET application, the code following the await operator is guaranteed to execute on a thread pool thread that has the client's culture and principal information associated with it.
+For the most part, application developers do not need to know anything about the SynchronizationContext class. When you await a Task, the calling thread's SynchronizationContext object is obtained. When a thread pool thread completes the Task, the SynchronizationContext object is used, ensuring the right theading model for your application model. So, **when a GUI thread awaits a Task, the code following the await operator is guaranteed to execute on the GUI thread as well, allowing that code to update UI elements. For an ASP.NET application, the code following the await operator is guaranteed to execute on a thread pool thread that has the client's culture and principal information associated with it**. read https://devblogs.microsoft.com/dotnet/configureawait-faq/
+
+```C#
+public sealed class Thread 
+{
+   internal SynchronizationContext _synchronizationContext; 
+   // ...
+}
+
+public partial class SynchronizationContext
+{
+   public static SynchronizationContext Current => Thread.CurrentThread._synchronizationContext;  // <-------------------------------
+   public static void SetSynchronizationContext(SynchronizationContext? syncContext) => Thread.CurrentThread._synchronizationContext = syncContext;
+
+   public virtual void Send(SendOrPostCallback d, object? state) => d(state);
+   public virtual void Post(SendOrPostCallback d, object? state) => ThreadPool.QueueUserWorkItem(static s => s.d(s.state), (d, state), preferLocal: false);
+   // ...
+}
+
+// an example that uses SynchronizationContext
+// assuming below is running on UI thread
+SynchronizationContext originalContext = SynchronizationContext.Current;  // associate originalContext with UI thread
+
+ThreadPool.QueueUserWorkItem(delegate {
+    string text = File.ReadAllText(@"c:\temp\log.txt");
+    originalContext.Post(delegate {    // in worker thread, ask UI thread (via UI thread's SynchronizationContext) to update UI element
+        myTextBox.Text = text;
+    }, null);
+});
+```
+
 
 Most of the time, having a state machine resume using the application model's threading model is phenomenally useful and convenient. But, on some occasions, this can get you into trouble. Here is an example that causes a WPF application to deadlock:
 ```C#
@@ -555,7 +588,7 @@ private sealed class MyWpfWindow : Window {
    protected override void OnActivated(EventArgs e) {
       // Querying the Result property prevents the GUI thread from returning;
       // the thread blocks waiting for the result
-      String http = GetHttp().Result; // Get the string synchronously!
+      String http = GetHttp().Result; // <------------------------get the string synchronously, this causes deadlock because of ".Result"
 
       base.OnActivated(e);
    }
@@ -570,7 +603,27 @@ private sealed class MyWpfWindow : Window {
    }
 }
 ```
-To solve this  problem, both the `Task` and `Task<TResult>` classes offer a method called `ConfigureAwait` whose signature looks like this:
+
+note that when an async method performs an await, by default it will capture a current context and use that to resume the async method, so it is like:
+
+```C#
+await SomethingAsync();
+RestOfMethod();
+
+// translated into
+var task = SomethingAsync();
+var currentSyncContext = SynchronizationContext.Current;
+
+task.ContinueWith(delegate
+{
+    if (currentSyncContext == null) RestOfMethod();
+    else currentSyncContext.Post(delegate { RestOfMethod(); }, null);
+
+}, TaskScheduler.Current);
+```
+
+
+so, to solve this problem, both the `Task` and `Task<TResult>` classes offer a method called `ConfigureAwait` whose signature looks like this:
 ```C#
 // Task defines this method:
 public ConfiguredTaskAwaitable ConfigureAwait(Boolean continueOnCapturedContext);
@@ -589,6 +642,10 @@ private async Task<String> GetHttp() {
    return await msg.Content.ReadAsStringAsync().ConfigureAwait(false);
 }
 ```
+
+Note that this example works because the UI thread in MyWpfWindow program is not updating UI elements. If it is, then you cannot use `ConfigureAwait(false)`, and you need to change `GetHttp().Result` to `GetHttp()`, but this still doesn't make sense, because eventually you do want to assess the result, so a real fix is: you shouldn't use UI thread to query sth asynchronously, only uses UI thread to update UI elements.
+
+
 As the preceding code shows, ConfigureAwait(false) must be applied to every Task object you await. You can't just add it on the first await operator, this is because asynchronous operations may complete synchronously and, when this happens, the calling thread simply continues executing without returning to its caller; you never know which operation requres ignoring the SynchronizationContext object, so you have to tell all of them to ignore it. 
 
 Alternatively, I could re-write my GetHttp method as follows so that the whole thing executes via a thread pool thread
@@ -602,6 +659,8 @@ private Task<String> GetHttp() {
    });
 }
 ```
+
+So in a nutshell, the purpose of using `ConfigureAwait(false)` is to handle the situation that application developers do sth like `var result = DoSthAsync().Result`. As a more advanced library devlopers, we should babysitting the deadlock situation.
 
 ## Canceling I/O Operations
 
@@ -657,7 +716,175 @@ static async void Go() {
 ```
 You'll see the program runs normally without throwing DivideByZeroException, which you probaby don't see why it behave like this, you already use await (`await Task.Run(...).WithCancellation(ct);`), then why it doesn't throw DivideByZeroException? This is becaue of the nature of state machine, the returned task is generated by the compiler and this task is not the same task as that task who throws DivideByZeroException. Without `await task;` in the extension method, the state machine related task's status will be RanToCompletion, not Faulted. Even you use await, it is not going to change anything. But if you have `await task;` as the last code in the extension method, it will throw DivideByZeroException can get caught by compiler-generated state machine's own try catch exceptions, check the code you will see how state machine add this exception into the new compiler generated task as its inner exception, now the code can catch DivideByZeroException.
 
-## An TimedHosted Example:
+-----------------------------------------------------------------------------------------------
+
+## `TaskCompletionSource`
+
+see https://gigi.nullneuron.net/gigilabs/taskcompletionsource-by-example/
+
+## `ValueTask`
+
+```C#
+public readonly struct ValueTask : IEquatable<ValueTask> 
+{
+   // ...
+}
+
+public readonly struct ValueTask<TResult> : IEquatable<ValueTask<TResult>> 
+{
+   public ValueTask(Task<TResult> task);
+   public ValueTask(TResult result);
+   public ValueTask(IValueTaskSource<TResult> source, short token);
+
+   public bool IsCompletedSuccessfully { get; }
+   public bool IsCompleted { get; }
+   public bool IsCanceled { get; }
+   public bool IsFaulted { get; }
+   public TResult Result { get; }
+
+   public Task<TResult> AsTask();
+   public ConfiguredValueTaskAwaitable<TResult> ConfigureAwait(bool continueOnCapturedContext);
+   public ValueTaskAwaiter<TResult> GetAwaiter();
+   // ...
+}
+```
+
+Let's see why sometimes we need to use ValueTask. Below is a method that does an asynchronous job just for one time or 1% and in 99% does a synchronous job:
+
+```C#
+private static string _myInformation;
+
+// bad
+public async Task<string> GetInformation()
+{
+    if (_myInformation is null)   // reads a value from a file on a disc asynchronously, call it again it will return the same value
+    {
+       _myInformation = await _myFileService.ReadInformation();  // return ValueTask<TResult> instance that wraps the Task instance
+    }
+
+    return _myInformation;
+}
+
+// good
+public async ValueTask<string> GetInformation()
+{
+    if (_myInformation is null)
+    {
+       _myInformation = await _myFileService.ReadInformation();
+    }
+
+    return _myInformation;  // return ValueTask<TResult> instance that wraps the string value directly
+}
+```
+
+The problem of the first bad method is, at most of times, we are paying the allocation cost of adding a new Task in the heap even though we weren't using the state machine to wait for async completions.
+
+`ValueTask` is better in this case because it is a struct, so it won't be allocated on the heap in the cases that there is an immediate value. Its really important to note that when there is any asynchronous work, then it will be allocated on the heap since it would be **converted to a Task** (compiler does the job behind the scene)
+
+With `ValueTask`(introduced in .NET Core 2.0) in hand, we can use new Async Enumerables interface from .NET Core 3.0
+
+```C#
+public interface IAsyncEnumerable<T>
+{
+   IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default);
+}
+
+public interface IAsyncEnumerator<out T> : IAsyncDisposable
+{
+   ValueTask<bool> MoveNextAsync();
+   T Current { get; }
+}
+
+public interface IAsyncDisposable
+{
+   ValueTask DisposeAsync();
+}
+```
+
+Let's first understand when we need to use `IAsyncEnumerable<T>`:
+
+With IOT (smart watch, smart house device etc) becoming bigger and bigger, it makes sense to PAYG (Process As You Go), below is the traditional approach:
+
+```C#
+// problematic traditional non-async enumerable approach
+static async Task Main(string[] args)
+{
+    foreach(var dataPoint in await FetchIOTData())
+    {
+        Console.WriteLine(dataPoint);
+    }
+    Console.ReadLine();
+}
+
+static async Task<IEnumerable<int>> FetchIOTData()
+{
+    List<int> dataPoints = new List<int>();
+    for (int i = 1; i <= 10; i++)
+    {
+        await Task.Delay(1000);  //Simulate waiting for data to come through. 
+        dataPoints.Add(i);
+    }
+    return dataPoints;
+}
+```
+
+We have to wait for 10 secs to process the all dataPoints. Even it's not going to be thread blocking and it's still async, but we don't get the data as soon as we receive it. This is where `IAsyncEnumerable` comes in:
+
+```C#
+// IAsyncEnumerable approach
+
+static async Task Main(string[] args)
+{
+    await foreach(var dataPoint in FetchIOTData())   // <--------- we await our foreach loop itself rather than awaiting the FetchIOTData method 
+    {                                                // and you cannot do `await FetchIOTData()` because IAsyncEnumerable<T> doesn't have GetAwaiter method
+        Console.WriteLine(dataPoint);
+    }
+
+    Console.ReadLine();
+}
+
+static async IAsyncEnumerable<int> FetchIOTData()
+{
+    for (int i = 1; i <= 10; i++)
+    {
+        await Task.Delay(1000);  //Simulate waiting for data to come through. 
+        yield return i;
+    }
+}
+```
+
+compiler transforms the `await foreach()` call into:
+
+```C#
+IAsyncEnumerator<int> e = FetchIOTData().GetAsyncEnumerator();
+
+try
+{
+   while (await e.MoveNextAsync()) {
+      Console.Write(e.Current + " ");   // <------------ Console.Write method is quite fast, if we do heavy process (takes more than 1 sec) this dataPoint instead of Console.Write
+   }                                    // because of `ValueTask<bool> MoveNextAsync()`, when we start to prcoess the next dataPoint which already be ready, then there is 
+}                                       // no Task instance allocated on heap, now you see why IAsyncEnumerable uses ValueTask<bool> rathern than Task<bool> for MoveNextAsync()
+finally 
+{ 
+   if (e != null) await e.DisposeAsync(); 
+}
+```
+
+
+## `IHostedService`
+
+The basic idea is that it allows us to register background tasks, that run while our web host is running. These are co-ordinated with the lifetime of the application. 
+
+```C#
+public interface IHostedService
+{  
+    Task StartAsync(CancellationToken cancellationToken);  // triggered when the application host is ready to start the service
+
+    Task StopAsync(CancellationToken cancellationToken);   // triggered when the application host is performing a graceful shutdown
+}
+```
+
+An example that run a service in every specific time manner:
 
 ```C#
 public abstract class TimedHostedService : IHostedService, IDisposable {
@@ -740,6 +967,11 @@ public abstract class TimedHostedService : IHostedService, IDisposable {
       stoppingCts.Cancel();
       timer?.Dispose();
    }
+}
+
+public class YourBackgroundService : TimedHostedService 
+{
+   // ...
 }
 ```
 

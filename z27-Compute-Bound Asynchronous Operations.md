@@ -376,9 +376,11 @@ public class Task : IThreadPoolWorkItem, IAsyncResult, IDisposable {
    // There is no public void Start(object state) like Thread's Start(object parameter)
    public void Start(TaskScheduler scheduler);
 
-   public static YieldAwaitable Yield() {   // <---------- see Chapter 28 for its usage
+   public static YieldAwaitable Yield() {   // <---------- see Chapter 28 for details
       return default;
    }
+
+   public ConfiguredTaskAwaitable ConfigureAwait(bool continueOnCapturedContext);  // <---------- see Chapter 28 for details
 }
 ```
 Insteadof calling ThreadPool's QueueUserWorkItem method, you can do the same via tasks:

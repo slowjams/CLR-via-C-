@@ -288,7 +288,7 @@ In fact, you can verify that the compiler did indeed generate this class automat
 In this example, the compiler has defined a class called Feedback that is derived from the `System.MulticastDelegate` type defined in the Framework Class Library (FCL). (All delegate types are derived from MulticastDelegate.)
 
 <div class="alert alert-info p-1" role="alert">
-    The System.MulticastDelegate class is derived from System.Delegate, which is itself derived from System.Object. The reason why there are two delegate classes is historical and unfortunate; there should be just one delegate class in the FCL. Sadly, you need to be aware of both of these classes because even though all delegate types you create have MulticastDelegate as a base class, you’ll occasionally manipulate your delegate types by using methods defined by the Delegate class instead of the MulticastDelegate class. For example, the Delegate class has static methods called <code>Combine</code> and <code>Remove</code>.
+    The System.MulticastDelegate class is derived from System.Delegate, which is itself derived from System.Object. The reason why there are two delegate classes is historical and unfortunate; there should be just one delegate class in the FCL. Sadly, you need to be aware of both of these classes because even though all delegate types you create have MulticastDelegate as a base class, you'll occasionally manipulate your delegate types by using methods defined by the Delegate class instead of the MulticastDelegate class. For example, the Delegate class has static methods called <code>Combine</code> and <code>Remove</code>.
 </div>
 
 <div class="alert alert-info p-1" role="alert">

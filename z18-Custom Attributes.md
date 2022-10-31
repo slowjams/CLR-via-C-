@@ -76,7 +76,7 @@ public abstract class Attribute : _Attribute {
     When applying an attribute to a target in source code, the C# compiler allows you to omit the Attribute suffix to reduce programming typing and to improve the readability. My code examples in this chapter take advantage of this C# convenience. For example, my source code contains <code>[DllImport(...)]</code>instead of <code>[DllImportAttribute(...)]</code>.
 </div>
 
-A custom attribute must have a public constructor so that instances of it can be "created" (By "created", it doesn't mean an instance of custom attribute will be created in heap by CLR, custom attributes are designed as class that have constructors to micmic oop, what it really does is to write inforamtion in target 's metadata tables). So when you apply an attribute to a target, the syntax is similar to that for calling one of the class’s instance constructors. In addition, a language might permit some special syntax to allow you to set any public fields or properties associated with the attribute class. Let's look at an example. Recall the application of the DllImport attribute as it was applied to the GetVersionEx method earlier:
+A custom attribute must have a public constructor so that instances of it can be "created" (By "created", it doesn't mean an instance of custom attribute will be created in heap by CLR, custom attributes are designed as class that have constructors to micmic oop, what it really does is to write inforamtion in target 's metadata tables). So when you apply an attribute to a target, the syntax is similar to that for calling one of the class's instance constructors. In addition, a language might permit some special syntax to allow you to set any public fields or properties associated with the attribute class. Let's look at an example. Recall the application of the DllImport attribute as it was applied to the GetVersionEx method earlier:
 ```C#
 [DllImport("Kernel32", CharSet = CharSet.Auto, SetLastError = true)]
 ```
@@ -210,7 +210,7 @@ Be aware that the .NET Framework considers targets only of classes, methods, pro
 
 When defining your own custom attribute class, you can define its constructor to take parameters that must be specified by developers when they apply an instance of your attribute type. In addition, you can define nonstatic public fields and properties in your type that identify settings that a developer can optionally choose for an instance of your attribute class.
 
-When defining an attribute class’s instance constructor, fields, and properties, you must restrict yourself to a small subset of data types. Specifically, the legal set of data types is limited to the following: Boolean, Char, Byte, SByte, Int16, UInt16, Int32, UInt32, Int64, UInt64, Single, Double, String, **Type, Object, or an enumerated type**. In addition, you can use a single-dimensional, zero-based array of any of these types. However, you should avoid using arrays because a custom attribute class whose constructor takes an array is not CLS-compliant.
+When defining an attribute class's instance constructor, fields, and properties, you must restrict yourself to a small subset of data types. Specifically, the legal set of data types is limited to the following: Boolean, Char, Byte, SByte, Int16, UInt16, Int32, UInt32, Int64, UInt64, Single, Double, String, **Type, Object, or an enumerated type**. In addition, you can use a single-dimensional, zero-based array of any of these types. However, you should avoid using arrays because a custom attribute class whose constructor takes an array is not CLS-compliant.
 
 When applying an attribute, you must pass a compile-time constant expression that matches the type defined by the attribute class. Wherever the attribute class defines a Type parameter, Type field, or Type property, you must use C#'s `typeof` operator. Wherever the attribute class defines an Object parameter, Object field, or Object property, you can pass an Int32, String, or any other constant expression (including null). If the constant expression represents a value type, the value type will be boxed at run time when an instance of the attribute is constructed.
 
@@ -244,6 +244,7 @@ class Person {
 internal sealed class SomeType { }
 ``` 
 Also note that you can pass structs which are primitive type only, you can't pass user defined struct instance such as:
+
 ```C#
 struct Person {
    ...
@@ -276,7 +277,7 @@ public class AuthorsAttribute : Attribute {
 ```
 The above code compiles, but _authors won't be serialized into assembly's metadata, and no exception thrown, which can be confusing to people who uses this attribute.
 
-Logically, when a compiler detects a custom attribute applied to a target, the compiler constructs an instance of the attribute class by calling its constructor, passing it any specified parameters. Then the compiler initializes any pulic fields and properties by using values specified via the enhanced constructor syntax. Now that the custom attribute object is initialized, the compiler serialized the attribute object's state out to the target's metadata table entry.
+**Logically, when a compiler detects a custom attribute applied to a target, the compiler constructs an instance of the attribute class by calling its constructor**, passing it any specified parameters. Then the compiler initializes any pulic fields and properties by using values specified via the enhanced constructor syntax. Now that the custom attribute object is initialized, the compiler serialized the attribute object's state out to the target's metadata table entry.
 
 <div class="alert alert-info p-1" role="alert">
     I've found this to be the best way for developers to think of custom attributes: instances of classes that have been serialized to a byte stream that resides in metadata. Later, at run time, an instance of the class can be constructed by deserializing the bytes contained in the metadata. In reality, what actually happens is that the compiler emits the information necessary to create an instance of the attribute class into metadata. Each constructor parameter is written out with a 1-byte type ID followed by the value. After "Serializing" the constructor's parameters, the compiler emits each of the specified field and property value by writting out the field/property name followed by a 1-byte type ID and then the value. For arrays, the count of elements is saved first, followed by each individual element.

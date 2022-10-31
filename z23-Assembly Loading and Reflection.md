@@ -226,6 +226,15 @@ class Program {
 Notice that the previous code iterates over a sequence of System.Type objects. The System.Type type is your starting point for doing type and object manipulations. A System.Type object represents a type reference (as opposed to a type definition).
 
 ```C#
+public abstract class MemberInfo : ... {
+   public abstract string Name { get; }
+   public abstract Type DeclaringType { get; }
+   public abstract Type ReflectedType { get; }
+   public virtual Module Module { get; }
+   public virtual IEnumerable<CustomAttributeData> CustomAttributes { get; }
+   // ...
+}
+
 public abstract class Type : MemberInfo ... {
    public bool IsAbstract { get; }
    public bool IsValueType { get; }
@@ -277,6 +286,9 @@ namespace System.Reflection {
    }
 }
 ```
+
+In a nutshell, `Type` offers a basic view of the structure of a class. If you want to dive a bit deeper into the structure of a class, you can use the new `TypeInfo`.
+
 The .NET 4.5 Framework includes some changes to the typical reflection use cases. Most importantly, the Type object has been split into two separate classes: Type and TypeInfo. A TypeInfo instance contains the definition for a Type, and a Type now contains only reference data. Getting a TypeInfo object forces the assembly that contains that type to load. In comparison, you can manipulate Type objects without necessarily requiring the runtime to load the assembly they reference.
 
 Recall that System.Object defines a public, nonvirtual instance method named `GetType`. When you call this method, the CLR determines the specified object's type and returns a reference to its Type object. **Because there is only one Type object per type in an AppDomain, you can use equality and inequality operators to see whether two objects are of the same type**:
