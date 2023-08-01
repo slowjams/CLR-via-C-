@@ -65,7 +65,7 @@ Intermediate Language (IL) for SomeType’s constructor method shown as:
 SomeType's constructor contains code to store a 5 into m_x and then calls the base class's constructor. In other words, the C# compiler allows the convenient syntax that lets you initialize the instance fields inline and **translates this to code in the constructor method** to perform the initialization. This means that you should be aware of code explosion, as illustrated by the following class definition:
 
 ```C#
-internal sealed class SomeType
+internal sealed class SomeType : OtherType
 {
     private Int32 m_x = 5;
     private String m_s = "Hi there";
@@ -76,7 +76,8 @@ internal sealed class SomeType
     public SomeType() { ... }
     public SomeType(Int32 x) { ... }
     public SomeType(String s) {  
-        ...;
+        // ...  execute all the field initializations
+        // ...  call base constructor
         m_d = 10;                  // executed after base construct is called
         Console.WriteLine(m_d);    // executed after base construct is called
     }

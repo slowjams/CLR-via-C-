@@ -434,6 +434,11 @@ public class Task<TResult> : Task {
    public Task ContinueWith(Action<Task<TResult>, object> continuationAction, object state, CancellationToken cancellationToken, TaskContinuationOptions continuationOptions, TaskScheduler scheduler);  // <-----most common used
 
    public Task<TNewResult> ContinueWith<TNewResult>(Func<Task<TResult>, object, TNewResult> continuationFunction, object state, CancellationToken cancellationToken, TaskContinuationOptions continuationOptions, TaskScheduler scheduler);  
+   
+   public new ConfiguredTaskAwaitable<TResult> ConfigureAwait(bool continueOnCapturedContext)  // see its usage at next chapter
+   {
+      return new ConfiguredTaskAwaitable<TResult>(this, continueOnCapturedContext);
+   }
    ...
 }
 

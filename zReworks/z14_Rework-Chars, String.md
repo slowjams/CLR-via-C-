@@ -3,24 +3,27 @@ Chapter 14-Chars, Strings, and Working with Text
 
 ## Characters
 
-In the .NET Framework, characters are always represented in **16-bit** Unicode code values, easing the development of global applications. A characters is represented with an instance of the System.Char structure(a value type). The `System.Char` type is pretty simple, it offers two public read-only constant fields: `MinValue`, defined as `\0`, and MaxValue, defined as `\uffff`.
+In the .NET Framework, characters are always represented in **16-bit Unicode** code values, easing the development of global applications. A characters is represented with an instance of the System.Char structure(a value type). The `System.Char` type is pretty simple, it offers two public read-only constant fields: `MinValue`, defined as `\0`, and MaxValue, defined as `\uffff`.
 
 ```C#
 public struct Char : IComparable, IConvertible, IComparable<Char>, IEquatable<Char> {
    public const Char MaxValue = '\uffff';
    public const Char MinValue = '\0';
 
-   public static UnicodeCategory GetUnicodeCategory(Char c);
    public static double GetNumericValue(Char c);
-
+   public static UnicodeCategory GetUnicodeCategory(Char c);  // <--------------------
+   
+   // all those methods (helper methods) call GetUnicodeCategory internally
    public static bool IsDigit(Char c);
-   public static bool IsDigit(string s, int index);  // string and index parameters pattern for all IsXXX method
-   public static bool IsNumber(Char c);   // for Roman numeral 5 (V) Char.IsNumber('\x2165') is true while Char.IsDigit('\x2165') is false                
+   public static bool IsDigit(string s, int index);  // string and index parameters pattern for all the IsXXX methods
+   public static bool IsNumber(Char c);              // for Roman numeral 5 (V) Char.IsNumber('\x2165') is true while Char.IsDigit('\x2165') is false                
+   public static bool IsNumber(string s, int index);
    public static bool IsLetter(Char c);
    public static bool IsHighSurrogate(Char c);
    public static bool IsLower(Char c);
    public static bool IsPunctuation(Char c);
    public static bool IsSurrogatePair(Char highSurrogate, Char lowSurrogate);
+   //
    ...
    public static Char ToUpper(Char c);
    public static Char ToUpper(Char c, CultureInfo culture);
@@ -35,7 +38,11 @@ public enum UnicodeCategory {
    UppercaseLetter = 0,
    LowercaseLetter = 1,
    ...
+   DecimalDigitNumber = 8,
+   ...
    Control = 14,
+   ...
+   Surrogate = 16,
    ...
    DashPunctuation = 19,
    ...
@@ -44,15 +51,16 @@ public enum UnicodeCategory {
    CurrencySymbol = 26,
    ...
 }
-
-static void Main(string[] args) {
-   var c = Char.GetUnicodeCategory('-');    // UnicodeCategory.DashPunctuation
-}
 ```
 
-Given an instance of a Char, you can call the static `GetUnicodeCategory` method, which returns a value of the `System.Globalization.UnicodeCategory` enumerated type. This value indicates whether the character is a control character, a currency symbol, a lowercase letter, an uppercase letter, a punctuation character, a math symbol, or another character (as defined by the Unicode standard).
+```C#
+using System.Globalization;
 
-To ease developing, the `Char` type also offers several static methods, such as IsDigit, IsLetter, IsWhiteSpace, IsUpper, IsLower, IsPunctation IsLetterOrDigit, IsControl, IsNumber, IsSeparator, IsSurrogate, IsLowSurrogate, IsHighSurrogate, and IsSymbol. Most of these methods call `GetUnicodeCategory` method internally. Note that all of these methods take either a single character for a parameter or a String and the index of a character within the String as parameters.
+static void Main(string[] args) {
+   UnicodeCategory a = Char.GetUnicodeCategory('-');   // a is DashPunctuation
+   UnicodeCategory b = Char.GetUnicodeCategory('9');   // b is DecimalDigitNumber
+}
+```
 
 In addition, you can convert a single character to its lowercase or uppercase equivalent in a culture-agnostic way by calling the static `ToLowerInvariant` or `ToUpperInvariant` method. Alternatively, the `ToLower` and `ToUpper` methods (without taking CultureInfo parameter) convert the character by using the culture information associated with the calling thread (which the methods obtain internally by querying the static CurrentCulture property of the `System.Globalization.CultureInfo` class). You can also specify a particular culture by passing an instance of the CultureInfo class to these methods. ToLower and ToUpper require culture information because letter casing is a culture-dependent operation. For example, Turkish considers the uppercase of U+0069 (LATIN LOWERCASE LETTER I) to be U+0130 (LATIN UPPERCASE LETTER I WITH DOT ABOVE), whereas other cultures consider the result to be U+0049 (LATIN CAPITAL LETTER I).
 
@@ -77,14 +85,12 @@ public static void Main() {
 ```
 
 Finally, three techniques allow you to convert between various numeric types to Char instances and vice versa. The techniques are listed here in order of preference:
-<ul>
-  <li><b>Casting</b> The easiest way to convert a Char to a numeric value such as an Int32 is simply by casting. Of the three techniques, this is the most efficient because the compiler emits Intermediate Language (IL) instructions to perform the conversion, and no methods have to be called. In addition, some languages (such as C#) allow you to indicate whether the conversion should be performed using checked or unchecked code</li>
-  <li><b>Use the Convert type</b> The System.Convert type offers several static methods that are capable of converting a Char to a numeric type and vice versa. All of these methods perform the conversion as a checked operation, causing an OverflowException to be thrown if the conversion results in the loss of data.
-</li>
-  <li><b>Use the IConvertible interface</b> The Char type and all of the numeric types in the .NET Framework Class Library (FCL) implement the IConvertible interface. This interface defines methods such as ToUInt16 and ToChar. This technique is the least efficient of the three because calling an interface method on a value type requires that the instance be boxed— Char and all of the numeric types are value types. The methods of IConvertible throw a
-System.InvalidCastException if the type can't be converted (such as converting a Char to a Boolean) or if the conversion results in a loss of data. Note that many types (including the FCL's Char and numeric types) implement IConvertible's methods as explicit interface member implementations. This means that you must
-explicitly cast the instance to an IConvertible before you can call any of the interface's methods.All of the methods of IConvertible except GetTypeCode accept a reference to an object that implements the IFormatProvider interface. This parameter is useful if for some reason the conversion needs to take culture information into account. For most conversions, you can pass null for this parameter because it would be ignored anyway</li>
-</ul> 
+
+**Casting**: The easiest way to convert a Char to a numeric value such as an Int32 is simply by casting. Of the three techniques, this is the most efficient because the compiler emits Intermediate Language (IL) instructions to perform the conversion, and no methods have to be called. In addition, some languages (such as C#) allow you to indicate whether the conversion should be performed using checked or unchecked code
+
+ Use the Convert type:  The `System.Convert` type offers several static methods that are capable of converting a Char to a numeric type and vice versa. All of these methods perform the conversion as a checked operation, causing an OverflowException to be thrown if the conversion results in the loss of data.
+
+ Use the IConvertible interface: This technique is the least efficient of the three because calling an interface method on a value type requires that the instance be boxed— Char and all of the numeric types are value types. 
 
 The following code demonstrates how to use these three techniques:
 ```C#
@@ -115,6 +121,7 @@ public static void Main() {
 }
 ```
 
+
 ```C#
 public interface IConvertible  // inefficient as you have to box/unbox unless you need to use FormatProvider
 {
@@ -144,12 +151,12 @@ public interface IConvertible  // inefficient as you have to box/unbox unless yo
 public sealed class String : IComparable, ICloneable, IConvertible, IComparable<String>, IEnumerable<char>, IEnumerable, IEquatable<String> {
    public static readonly String Empty;
 
-   public String(char[] value);
+   public extern String(char[] value);  // <----------------must use unmanaged C++ code
    public String(char c, int count);
    public String(char[] value, int startIndex, int length);
    public String(char* value);    // when used unmanaged code
-   ...
-
+   //...
+   public char this[int index];
    public int Length { get; }
 
    public static int Compare(String strA, String strB);
@@ -345,7 +352,205 @@ If you want to change the case of a string's characters before performing an ord
 
 ## Background knowledge on different culture
 
+```C#
+//------------------------------V
+public partial class CultureInfo : IFormatProvider, ICloneable
+{
+   public CultureInfo(int culture);
+   public CultureInfo(string name) : this(name, true) { }  // useUserOverride is default to `true`
+   public CultureInfo(int culture, bool useUserOverride);  // user can override some setting via Control Panel, see the example below
+   public CultureInfo(string name, bool useUserOverride)
+   {
+      CultureData? cultureData = CultureData.GetCultureData(name, useUserOverride);
+      _cultureData = cultureData;
+      _name = _cultureData.CultureName;
+      _isInherited = GetType() != typeof(CultureInfo);
+   }
+
+   private CultureInfo(CultureData cultureData, bool isReadOnly = false)
+   {
+      _cultureData = cultureData;
+      _name = cultureData.CultureName;
+      _isReadOnly = isReadOnly;
+   }
+
+   private static volatile CultureData? s_Invariant;
+   private static readonly CultureInfo s_InvariantCultureInfo = new CultureInfo(CultureData.Invariant, isReadOnly: true);
+
+   public static CultureInfo InvariantCulture
+   {
+      get {
+         return s_InvariantCultureInfo;
+      }
+   }
+
+   public static CultureInfo InstalledUICulture { get; }
+   public static CultureInfo? DefaultThreadCurrentUICulture { get; set; }
+   public static CultureInfo? DefaultThreadCurrentCulture { get; set; }
+   public static CultureInfo CurrentCulture { get; set; }
+   public static CultureInfo CurrentUICulture { get; set; }
+   
+   public static CultureInfo CreateSpecificCulture(string name);
+   public static CultureInfo GetCultureInfo(string name);
+   public static CultureInfo GetCultureInfo(int culture);
+   public static CultureInfo[] GetCultures(CultureTypes types);
+   
+   public virtual string Name { get; }
+   public virtual string DisplayName { get; }
+   public virtual string EnglishName { get; }
+   public virtual CultureInfo Parent { get; }  
+   public virtual TextInfo TextInfo { get; }
+   public virtual DateTimeFormatInfo DateTimeFormat { get; set; }
+   public virtual NumberFormatInfo NumberFormat { get; set; }
+   public virtual CompareInfo CompareInfo { get; }
+   public CultureTypes CultureTypes { get; }
+   public bool UseUserOverride { get; }
+
+   // ...
+
+
+}
+//------------------------------Ʌ
+
+//---------------------------------------V
+internal sealed partial class CultureData
+{
+   private const int LocaleNameMaxLength = 85;
+   private const int undef = -1;
+
+   // Override flag
+   private string _sRealName = null!; // Name you passed in (ie: en-US, en, or de-DE_phoneb). Initialized by helper called during initialization.
+   private string? _sWindowsName; // Name OS thinks the object is (ie: de-DE_phoneb, or en-US (even if en was passed in))
+ 
+   // Identity
+   private string? _sName; // locale name (ie: en-us, NO sort info, but could be neutral)
+   private string? _sParent; // Parent name (which may be a custom locale/culture)
+   private string? _sEnglishDisplayName; // English pretty name for this locale
+   private string? _sNativeDisplayName; // Native pretty name for this locale
+   private string? _sSpecificCulture; // The culture name to be used in CultureInfo.CreateSpecificCulture(), en-US form if neutral, sort name if sort
+
+   // Region
+   private string? _sRegionName; // (RegionInfo)
+   private string? _sLocalizedCountry; // localized country name
+
+   // ... Currency, Time, Calendar etc
+
+   internal static CultureData Invariant => s_Invariant ??= CreateCultureWithInvariantData();
+
+   private static CultureData CreateCultureWithInvariantData()  // <-------------------------------------InvariantCulture setup
+   {
+      CultureData invariant = new CultureData();
+
+      // Identity
+      invariant._sName = "";       // locale name (ie: en-us)  <-----------------------emmmm, don't know why the comment mentions en-us here
+      invariant._sParent = "";     // Parent name (which may be a custom locale/culture)
+      invariant._bNeutral = false; // Flags for the culture (ie: neutral or not right now)
+      invariant._sEnglishDisplayName = "Invariant Language (Invariant Country)"; // English pretty name for this locale
+      invariant._sNativeDisplayName = "Invariant Language (Invariant Country)";  // Native pretty name for this locale
+      invariant._sSpecificCulture = ""; 
+      // ...
+   }
+}
+//---------------------------------------Ʌ
+
+//---------------------->>
+[Flags]
+public enum CultureTypes
+{
+   NeutralCultures = 0x0001, // Neutral cultures are cultures like "en", "de", "zh", etc
+   SpecificCultures = 0x0002, // Non-netural cultuers.  Examples are "en-us", "zh-tw", etc
+   InstalledWin32Cultures = 0x0004,  
+   AllCultures = NeutralCultures | SpecificCultures | InstalledWin32Cultures,
+   // ...
+}
+//----------------------<<
+```
+
+```C#
+static void Main(string[] args)
+{
+    CultureInfo[] availableCultures = CultureInfo.GetCultures(CultureTypes.SpecificCultures);
+    foreach (CultureInfo cultureInfo in availableCultures)
+    {        
+        Console.WriteLine(cultureInfo.Name);
+        /*
+        en-AU, en-CA, en-US, en-VI
+        zh-CN, zh-HK, zh-TW
+        */
+
+        Console.WriteLine(cultureInfo.DisplayName);
+        /*
+        English (Australia), English (Canada), English (United States), English (U.S. Virgin Islands)
+        Chinese (Simplified, China), Chinese (Traditional, Hong Kong SAR), Chinese (Traditional, Taiwan)
+        */
+    }
+
+    CultureInfo[] availableCultures = CultureInfo.GetCultures(CultureTypes.NeutralCultures);
+    foreach (CultureInfo cultureInfo in availableCultures)
+    {        
+        Console.WriteLine(cultureInfo.Name);
+        /*
+        "", en, zh, zh-Hans, zh-Hant
+        */
+
+        Console.WriteLine(cultureInfo.DisplayName);
+        /*
+        Invariant Language (Invariant Country), English, Chinese, Chinese (Simplified), Chinese (Traditional)
+        */
+    }
+    
+    // same 
+    CultureInfo ci = new CultureInfo("en-US");
+    CultureInfo ci = CultureInfo.CreateSpecificCulture("en-US");
+    //
+    
+    // demo the hierarchy relationship: Specific culture ----> Neutral culture ---> Invariant culture
+    CultureInfo pCi = ci.Parent;    // en
+    CultureInfo gpCi = pCi.Parent;  // InvariantCulture which is very close to en but not the same
+    //
+
+    // InvariantCulture
+    var d = DateTime.Now;
+    var s1 = d.ToString(CultureInfo.InvariantCulture);  // "03/29/2023 20:32:24"
+    var s3 = d.ToString(new CultureInfo("en"));         // "3/29/2023 8:32:24 PM"
+    var s2 = d.ToString(new CultureInfo("en-US"));      // "29-Mar-23 8:32:24 PM" 
+    //
+
+    /* useUserOverride
+       let's say you change the No. of digits after deciaml from 2 to 3 in the Control Panel
+       note that the code below uses en-US just for an example, you can use other suitable culture like en-AU too
+    */
+    var ci1 = new CultureInfo("en-US");          // ci1.NumberFormat.NumberDecimalDigits is 3
+    var ci2 = new CultureInfo("en-US", false);   // ci2.NumberFormat.NumberDecimalDigits is still 2
+    
+    // another example of using useUserOverride
+    Console.WriteLine(DateTime.Now.ToString(new CultureInfo("en-US")));        // "29-Mar-23 8:32:24 PM", but wait, isn't that americans use month before date
+    Console.WriteLine(DateTime.Now.ToString(new CultureInfo("en-US", false));  // "3-29-2023 8:32:24 PM", because previous code still uses your pc's culture from Control Panel 
+    //so the first `Console.WriteLine(DateTime.Now.ToString(new CultureInfo("en-US")))` is just like calling `Console.WriteLine(DateTime.Now.ToString(new CultureInfo("en-AU")))`
+    
+
+}
+```
+
+Below is an classical example that why we need to use `InvariantCulture`
+
+```C#
+Thread.CurrentThread.CurrentCulture = new CultureInfo("fr");
+double source = 455.62d;
+string serialized = source.ToString();   //455,62 since `, is the decimal seperator` in "fr"
+
+Thread t = new Thread((x) =>
+{
+    double deserialized = double.Parse(((string)x));
+    Console.WriteLine(string.Format("Deserialized value is {0}", deserialized));  // outputs 45562, bang!!!!!!!!!
+});
+
+t.CurrentCulture = new CultureInfo("en-US");  // en-US uses "," separates groups of digits to the left of the decimal
+t.Start(serialized);
+```
+
 When you want to compare string, you might do sth easily as:
+
 ```C#
 string arg = "Login";
 
@@ -353,11 +558,8 @@ if (arg.ToUpper() == "LOGIN") {   // won't work 100% correctly due to Turkish's 
    ...                            
 }
 ```
-But in Turkish, this code will always throw an exception, because ToUpper("i") method returns `İ` instead of `I`.
+in Turkish, this code will always throw an exception, because `ToUpper("i")` method returns `İ` instead of `I`. In Turkish, there are four i characters. lowercase `i` (dotted) and `ı` (dotless). Uppercase for them are `İ` and  `I` respectively.
 
-<div class="alert alert-info p-1" role="alert">
-    In Turkish, there are four i characters. lowercase <code>i</code> (dotted) and <code>ı</code> (dotless). Uppercase for them are <code>İ</code> and  <code>I</code> respectively.
-</div>
 
 Below code shows the differences in detail:
 ```C#
@@ -386,7 +588,7 @@ if (arg.Equals("Login", StringComparison.InvariantCultureIgnoreCase)) {
 ```
 InvariantCulture uses culture table to compare characters (and interpret linguistically) whereas Ordinal performs byte-by-byte comparison. OrdinalIgnoreCase is the same as Ordinal except that casing is ignored for [A-Z] and [a-z] characters. Other characters except [A-Z], **OrdinalIgnoreCase uses InvariantCulture table to lookup uppercase/lowercase.**
 
-`ToUpperInvariant()` and Equals with InvariantCultureIgnoreCase option are generally OK. But InvariantCulture has its own problem. That is, under this invariant culture, some characters can be interpreted differently. For example, `\u0061\u030a` is interpreted as `\u00e5`,  which is like combination of multiple characters into one when it seems to appropriate, more on this in the Introduction to UTF-16 encoding in later section.
+`ToUpperInvariant()` and Equals with InvariantCultureIgnoreCase option are generally OK. **But InvariantCulture has its own problem. That is, under this invariant culture, some characters can be interpreted differently**, for example, `\u0061\u030a` is interpreted as `\u00e5`,  which is like combination of multiple characters into one when it seems to appropriate, more on this in the Introduction to UTF-16 encoding in later section.
 So what the best method shoud be used when compare with "Login"? The answer is:
 ```C#
 public sealed class String {
@@ -397,32 +599,27 @@ public sealed class String {
 so the 100% correct code should be:
 ```C#
 // Both non-static and static methods are the same just written in a different way
-
 if (arg.Equals("LOGIN", StringComparison.OrdinalIgnoreCase)) {
-   ...
+   // ...
 }
 
 if(String.Equals(args, "LOGIN", StringComparison.OrdinalIgnoreCase)) {
-   ...
+   // ...
 }
 ```
 
-<div class="alert alert-info p-1" role="alert">
-    You should avoid use <code>==</code> in string comparision like <code>arg.ToUpperInvariant() == "LOGIN"</code>, more on this in next section
-</div>
+You should **avoid** use `==` in string comparision like `arg.ToUpperInvariant() == "LOGIN"`</code>`, more on this in next section
 
 Sometimes, when you compare strings in a linguistically correct manner, you want to specify a specific culture rather than use a culture that is associated with the calling thread. In this case, you can use the overloads of the StartsWith, EndsWith, and Compare methods shown earlier, all of which take Boolean and CultureInfo arguments.
 
 Note that  by default, String's `public int CompareTo(String strB)` (required by the IComparable) performs a culture-sensitive comparison, whereas `public bool Equals(String value);`, `==` performs an ordinal comparison. You should avoid these methods and operators is because the caller does not explicitly indicate how the string comparison should be performed, and you cannot determine from the name of the method what the default comparison will be. Your code will be easier to read and maintain if you always indicate explicitly how you want to perform your string comparisons. 
 
-Now, let's talk about how to perform linguistically correct comparisons. The .NET Framework uses the `System.Globalization.CultureInfo` type to represent a language/country pair. For example, "en-US" identifies English as written in the United States, "en-AU" identifies English as written in Australia, and "de-DE" identifies German as written in Germany. In the CLR, every thread has two properties associated with it. Each of these properties refers to a `CultureInfo` object. The two properties are:
 
-<ul>
-  <li><b>CurrentUICulture</b> This property is used to obtain resources that are shown to an end user. It is most useful for GUI or Web Forms applications because it indicates the language that should be used when displaying UI elements such as labels and buttons. By default, when you create a thread, this thread property is set to a CultureInfo object, which identifies the language of the Windows version the application is running on using the Win32 GetUserDefaultUILanguage function. </li>
-  <li><b>CurrentCulture</b> This property is used for everything that CurrentUICulture isn’t used for, including number and date formatting, string casing, and string comparing. When formatting, both the language and country parts of the CultureInfo object are used. By default, when you create a thread, this thread property is set to a CultureInfo object, whose value is determined by calling the Win32 GetUserDefaultLCID method, whose value is set in the Regional And Language Control Panel applet.</li>
-</ul> 
+`CurrentUICulture`: This property is used to obtain resources that are shown to an end user. It is most useful for GUI or Web Forms applications because it indicates the language that should be used when displaying UI elements such as labels and buttons. By default, when you create a thread, this thread property is set to a CultureInfo object, which identifies the language of the Windows version the application is running on using the Win32 GetUserDefaultUILanguage function.
 
-On many computers, a thread’s CurrentUICulture and CurrentCulture properties will be set to the same CultureInfo object, which means that they both use the same language/country information. However, they can be set differently. For example: an application running in the United States could use Spanish for all of its menu items and other GUI elements while properly displaying all of the currency and date formatting for the United States. To do this, the thread's CurrentUICulture property should be set to a CultureInfo object initialized with a language of "es" (for Spanish), while the thread's CurrentCulture property should be set to a CultureInfo object initialized with a language/country pair of "en-US."
+`CurrentCulture`: This property is used for everything that CurrentUICulture isn't used for, including number and date formatting, string casing, and string comparing. When formatting, both the language and country parts of the CultureInfo object are used. By default, when you create a thread, this thread property is set to a CultureInfo object, whose value is determined by calling the Win32 GetUserDefaultLCID method, whose value is set in the Regional And Language Control Panel applet.
+
+On many computers, a thread's CurrentUICulture and CurrentCulture properties will be set to the same CultureInfo object, which means that they both use the same language/country information. However, they can be set differently. For example: an application running in the United States could use Spanish for all of its menu items and other GUI elements while properly displaying all of the currency and date formatting for the United States. To do this, the thread's `CurrentUICulture` property should be set to a CultureInfo object initialized with a language of "es" (for Spanish), while the thread's `CurrentCulture` property should be set to a CultureInfo object initialized with a language/country pair of "en-US."
 
 The following code demonstrates the difference between performing an ordinal comparison and a culturally aware string comparison:
 ```C#
@@ -451,23 +648,43 @@ When the Compare method is not performing an ordinal comparison, it performs cha
 
 ## String Pooling
 
-When compiling source code, your compiler must process each literal string and emit the string into the managed module’s metadata. If the same literal string appears several times in your source code, emitting all of these strings into the metadata will bloat the size of the resulting file.
+When compiling source code, your compiler must process each literal string and emit the string into the managed module's metadata. If the same literal string appears several times in your source code, emitting all of these strings into the metadata will bloat the size of the resulting file.
 
 To remove this bloat, many compilers (including the C# compiler) write the literal string into the module's metadata only once. All code that references the string will be modified to refer to the one string in the metadata. This ability of a compiler to merge multiple occurrences of a single string into
 a single instance can reduce the size of a module substantially. This process is nothing new—C/C++ compilers have been doing it for years. (Microsoft's C/C++ compiler calls this string pooling.)
 
 ## String Interning
 
-As I said in the preceding section, checking strings for equality is a common operation for many applications—this task can hurt performance significantly. When performing an ordinal equality check, the CLR quickly tests to see if both strings have the same number of characters. If they don't, the strings are definitely not equal; if they do, the strings might be equal, and the CLR must then compare each individual character to determine for sure. When performing a culturally aware comparison, the CLR must always compare all of the individual characters because strings of different lengths might be considered equal, that's why **ordinal equality check is much faster than  culturally aware comparison**.
+The CLR conserves string storage by maintaining a table, called the intern pool, that contains a single reference to each unique literal string declared or created programmatically in your program. 
 
-In addition, if you have several instances of the same string duplicated in memory, you're wasting memory because strings are immutable. You’ll use memory much more efficiently if there is just one instance of the string in memory and all variables needing to refer to the string can just point to the single string object.
+```C#
+string s1 = "MyTest";  // already interned because it is a literal in assembly's metadata
+
+string s2 = new StringBuilder().Append("My").Append("Test").ToString();  // construct a new string which is also MyTest, note that s2 is not interned
+
+string s3 = String.Intern(s2);  // even though s2 is a different string instance to s1, but their hash keys are the same, so s1's reference is returned and assgined to s3
+                                // you might ask why CLR needs to create a new string instance for the has table to reference, why not just return s2's reference directly,
+                                // the point is, you want to intern common strings that will be used mulitple times not just in one method but in the whole program, if 
+                                // s2's reference to no longer needed by the program, and garbage collected, you can test common strings later. S o at this stage, 
+                                // there are two different string instance s2, and s3 that both have "MyTest" content, which might not be efficient at the first sight
+
+Console.WriteLine((Object)s2 == (Object)s3);  // false, CLR creates a new string instance (has same content of s2 instance) referenced by the hash table
+
+Console.WriteLine((Object)s2 == (Object)s1);  // false, different references.
+
+Console.WriteLine((Object)s3 == (Object)s1);  // true, same reference.
+```
+
+As I said in the preceding section, checking strings for equality is a common operation for many applications—this task can hurt performance significantly. **When performing an ordinal equality check, the CLR quickly tests to see if both strings have the same number of characters**. If they don't, the strings are definitely not equal; if they do, the strings might be equal, and the CLR must then compare each individual character to determine for sure. When performing a culturally aware comparison, the CLR must always compare all of the individual characters because strings of different lengths might be considered equal, that's why **ordinal equality check is much faster than culturally aware comparison**.
+
+In addition, if you have several instances of the same string duplicated in memory, you're wasting memory because strings are immutable. You'll use memory much more efficiently if there is just one instance of the string in memory and all variables needing to refer to the string can just point to the single string object.
 
 If your application frequently compares strings for equality by using case-sensitive, ordinal comparisons, or if you expect to have many string objects with the same value, you can enhance performance substantially if you take advantage of the string interning mechanism in the CLR. When the CLR initializes, it creates an internal hash table in which the keys are strings and the values are references to String objects in the managed heap. Initially, the table is empty (of course). The String class offers two methods that allow you to access this internal hash table:
 ```C#
 public static String Intern(String str); 
 public static String IsInterned(String str);
 ```
-The first method `Intern` takes a string, obtains a hash code for it, and checks the internal hash table for a match. If an identical string already exists, a reference to the already existing String object is returned. If an identical string doesn't exist, a copy of the string is made, the copy is added to the internal hash table, and a reference to this copy is returned. If the application no longer holds a reference to the original String object, the garbage collector is able to free the memory of that string. Note that the garbage collector can't free the strings that the internal hash table refers to because the hash table holds the reference to those String objects. String objects referred to by the internal hash table can’t be freed until the AppDomain is unloaded or the process terminates.
+The first method `Intern` takes a string, obtains a hash code for it, and checks the internal hash table for a match. If an identical string already exists, a reference to the already existing String object is returned. If an identical string doesn't exist, a copy of the string is made, the copy is added to the internal hash table, and a reference to this copy is returned. If the application no longer holds a reference to the original String object, the garbage collector is able to free the memory of that string. Note that the garbage collector can't free the strings that the internal hash table refers to because the hash table holds the reference to those String objects. String objects referred to by the internal hash table can't be freed until the AppDomain is unloaded or the process terminates.
 
 The `IsInterned` method takes a String and also looks it up in the internal hash table. If a matching string is in the hash table, `IsInterned` returns a reference to the interned string object. If a matching string isn't in the hash table, however, IsInterned returns null; it doesn't add the string to the hash table. 
 
@@ -477,13 +694,13 @@ By default, when an assembly is loaded, the CLR interns all of the literal strin
 ```C#
 String s1 = "Hello";
 String s2 = "Hello"; 
-Console.WriteLine(Object.ReferenceEquals(s1, s2)); // Should be 'False' 
+Console.WriteLine(Object.ReferenceEquals(s1, s2)); // 'True' emmmmmm
 
 s1 = String.Intern(s1);
 s2 = String.Intern(s2);
 Console.WriteLine(Object.ReferenceEquals(s1, s2)); // 'True'
 ```
-In the first call to the ReferenceEquals method, s1 refers to a "Hello" string object in the heap, and s2 refers to a different "Hello" string object in the heap. Because the references are different, False should be displayed. However, if you run this on version 4.5 of the CLR, you’ll see that True is displayed. The reason is because this version of the CLR chooses to ignore the attribute/flag emitted by the C# compiler, and the CLR interns the literal "Hello" string when the assembly is loaded into the AppDomain. This means that s1 and s2 refer to the single "Hello" string in the heap. However, as mentioned previously, you should never write code that relies on this behavior because a future version of the CLR might honor the attribute/flag and not intern the "Hello" string. In fact, version 4.5 of the CLR does honor the attribute/flag when this assembly’s code has been compiled using the NGen.exe utility.
+In the first call to the ReferenceEquals method, s1 refers to a "Hello" string object in the heap, and s2 refers to a different "Hello" string object in the heap. Because the references are different, False should be displayed. However, if you run this on version 4.5 of the CLR, youlll see that True is displayed. The reason is because this version of the CLR chooses to ignore the attribute/flag emitted by the C# compiler, and the CLR interns the literal "Hello" string when the assembly is loaded into the AppDomain. This means that s1 and s2 refer to the single "Hello" string in the heap. However, as mentioned previously, you should never write code that relies on this behavior because a future version of the CLR might honor the attribute/flag and not intern the "Hello" string. In fact, version 4.5 of the CLR does honor the attribute/flag when this assembly's code has been compiled using the NGen.exe utility.
 
 Before the second call to the ReferenceEquals method, the "Hello" string has been explicitly interned, and s1 now refers to an interned "Hello". Then by calling Intern again, s2 is set to refer to the same "Hello" string as s1. Now, when ReferenceEquals is called the second time, we are guaranteed to get a result of True regardless of whether the assembly was compiled with the attribute/flag.
 
@@ -498,16 +715,16 @@ private static Int32 NumTimesWordAppearsEquals(String word, String[] wordlist) {
    return count; 
 }
 ```
-As you can see, this method calls String’s Equals method, which internally compares the strings' individual characters and checks to ensure that all characters match. This comparison can be slow. In addition, the wordlist array might have multiple entries that refer to multiple String objects containing the same set of characters. This means that multiple identical strings might exist in the heap and are surviving ongoing garbage collections.
+As you can see, this method calls String's Equals method, which internally compares the strings' individual characters and checks to ensure that all characters match. This comparison can be slow. In addition, the wordlist array might have multiple entries that refer to multiple String objects containing the same set of characters. This means that multiple identical strings might exist in the heap and are surviving ongoing garbage collections.
 
 Now, let's look at a version of this method that was written to take advantage of string interning:
 ```C#
-private static Int32 NumTimesWordAppearsIntern(String word, String[] wordlist) {
+private static Int32 NumTimesWordAppearsIntern(String word, String[] wordlist) {  // existing strings added to wordlist should already be interned, code not shown here
    // This method assumes that all entries in wordlist refer to interned strings
    word = String.Intern(word);
    Int32 count = 0;
    for (Int32 wordnum = 0; wordnum < wordlist.Length; wordnum++) {
-      if (Object.ReferenceEquals(word, wordlist[wordnum])) {
+      if (Object.ReferenceEquals(word, wordlist[wordnum])) {  //  simply a matter of comparing pointers
          count ++
       }
    }
@@ -516,38 +733,17 @@ private static Int32 NumTimesWordAppearsIntern(String word, String[] wordlist) {
 ```
 This method interns the word and assumes that the wordlist contains references to interned strings. First, this version might be saving memory if a word appears in the wordlist multiple times because, in this version, wordlist would now contain multiple references to the same single String object in the heap. Second, this version will be faster because determining if the specified word is in the array is simply a matter of comparing pointers.
 
-Although the NumTimesWordAppearsIntern method is faster than the NumTimesWordAppearsEquals method, the overall performance of the application might be slower when using the NumTimesWordAppearsIntern method because of the time it takes to intern all of the strings when they were added to the wordlist array (code not shown). The NumTimesWordAppearsIntern method will really show its performance and memory improvement if the application needs to call the method multiple times using the same wordlist. The point of this discussion is to make it clear that string interning is useful, but it should be used with care and caution. In fact, this is why the C# compiler indicates that it doesn’t want string interning to be enabled.
+Although the NumTimesWordAppearsIntern method is faster than the NumTimesWordAppearsEquals method, the overall performance of the application might be slower when using the NumTimesWordAppearsIntern method because of the time it takes to intern all of the strings when they were added to the wordlist array (code not shown). The NumTimesWordAppearsIntern method will really show its performance and memory improvement if the application needs to call the method multiple times using the same wordlist. The point of this discussion is to make it clear that string interning is useful, but it should be used with care and caution. In fact, this is why the C# compiler indicates that it doesn't want string interning to be enabled.
 
-<div class="alert alert-info p-1" role="alert">
-    keep in mind that interning a string has two unwanted side effects. First, the memory allocated for interned String objects is not likely to be released until the CLR terminates. The reason is that the CLR's reference to the interned String object can persist after your application, or even your application domain, terminates. Second, to intern a string, you must first create the string. The memory used by the String object must still be allocated, even though the memory will eventually be garbage collected.
-</div>
-
-<div class="alert alert-info p-1" role="alert">
-    The author says: "when an assembly is loaded, the CLR interns all of the literal strings described in the assembly's metadata.",  but it doesn't seem to true, I asked a question on stackoverflow, one answer is "the literal from the assembly isn't interned until CLI has jitted ldstr" (when a method related to the string is called). See code example below.
-</div>
-
-```C#
-static void Main(string[] args) {
-    //Test();
-    string userName = Console.ReadLine();
-    Console.WriteLine(String.IsInterned(userName) ?? "No Interned");
-
-    //output is "No Interned", if you uncomment the first line to call Test() method first then "Hello" is interned, then the ouput is "Hello"
-}
-
-static string Test() {
-    return "Hello";
-}
-```
 
 ## Other String Operations
 
 The String type also offers methods that allow you to copy a string or parts of it. Table below summarizes these methods:
 
-| Member | Type | Description |
+| Member | Type        | Description |
 | -------| ----------- | ----------- |
-| Clone | Instance | Returns a reference to the same object (this).  This is OK because String objects are immutable. This method implements String's ICloneable interface. |
-| Copy | Static | Returns a new duplicate string of the specified string. This method is rarely used and exists to help applications that treat string as tokens. Normally, strings with the same set of characters are interned to a single string. This method creates a new string object so that the references (pointers) are different even though the strings contain the same characters. |
+| Clone  | Instance    | Returns a reference to the same object (this).  This is OK because String objects are immutable. This method implements String's ICloneable interface. |
+| Copy   | Static      | Returns a new duplicate string of the specified string. This method is rarely used and exists to help applications that treat string as tokens. Normally, strings with the same set of characters are interned to a single string. This method creates a new string object so that the references (pointers) are different even though the strings contain the same characters. |
 | CopyTo | Instance | Copy a portion of the string's characters to an array of characters. |
 | Substring | Instance | Returns a new string that represents a portion of the original string. |
 | ToString | Instance | Returns a reference to the same object (this). |
@@ -558,7 +754,7 @@ In addition to these methods, String offers many static and instance methods tha
 
 Because the String type represents an immutable string, the FCL provides another type, `System.Text.StringBuilder`, which allows you to perform dynamic operations efficiently with strings and characters to create a String. Think of StringBuilder as a fancy constructor to create a String that can be used with the rest of the framework. In general, you should design methods that take String parameters, not StringBuilder parameters.
 
-Logically, a `StringBuilder` object contains a field that refers to an array of Char structures. StringBuilder's members allow you to manipulate this character array, effectively shrinking the string or changing the characters in the string. **If you grow the string past the allocated array of characters, the StringBuilder automatically allocates a new, larger array, copies the characters, and starts using the new array. The previous array is garbage collected.**
+Logically, a `StringBuilder` object contains a field that refers to an array of Char structures (`m_ChunkChars`). StringBuilder's members allow you to manipulate this character array, effectively shrinking the string or changing the characters in the string. **If you grow the string past the allocated array of characters, the StringBuilder automatically allocates a new, larger array, copies the characters, and starts using the new array. The previous array is garbage collected.**
 
 When finished using the StringBuilder object to construct your string, "convert" the StringBuilder's character array into a String simply by calling the StringBuilder's `ToString` method. This creates a new String object in the heap that contains the string that was in the StringBuilder at the time you called ToString. At this point, you can continue to manipulate the string inside the StringBuilder, and later you can call ToString again to convert it into another String object.
 
@@ -566,7 +762,11 @@ When finished using the StringBuilder object to construct your string, "convert"
 
 Unlike with the String class, the CLR has no special information about the `StringBuilder` class:
 ```C#
-public sealed class StringBuilder : ISerializable {
+public sealed class StringBuilder : ISerializable 
+{
+   internal char[] m_ChunkChars;  // <---------------will be initialized to contain 16 chars
+   internal const int DefaultCapacity = 16;
+
    public StringBuilder();
    public StringBuilder(int capacity);
    public StringBuilder(string value);
@@ -576,19 +776,23 @@ public sealed class StringBuilder : ISerializable {
 
    public char this[int index] { get; set; };
 
-   public int MaxCapacity { get; };
-   public int Length { get; set; };
-   public int Capacity { get; set; };
-   
+   public int MaxCapacity { get; };    // default is Int32.MaxValue (2 billion), you can specify a smaller nuumber to ensure that you never create a string over a certain length
+   public int Length { get; set; };    // 
+   public int Capacity { get; set; };  // <-------------indicating the size of the character array being maintained by the StringBuilder. The default is 16, If you've idea of 
+                                       // how many chars you will place in it, you should use this number to set the capacity when constructing the StringBuilder object.
+
    public StringBuilder Append(object value);
    public StringBuilder Append(char[] value);
    public StringBuilder Append(string value);
 
+   // AppendFormats are the most popular methods being used in StringBuilder
    public StringBuilder AppendFormat(string format, object arg0);
    public StringBuilder AppendFormat(string format, object arg0, object arg1);
    public StringBuilder AppendFormat(string format, object arg0, object arg1, object arg2);
    public StringBuilder AppendFormat(string format, params object[] args);
    public StringBuilder AppendFormat(IFormatProvider provider, string format, params object[] args);
+   //
+
    public StringBuilder AppendLine();
    public StringBuilder Clear();
 
@@ -606,46 +810,16 @@ public sealed class StringBuilder : ISerializable {
    public override string ToString();
 }
 ```
-In addition, most languages (including C#) don't consider the StringBuilder class to be a primitive type. You construct a StringBuilder object as you would any other non-primitive type:
-```C#
-StringBuilder sb = new StringBuilder();
-```
-The StringBuilder type offers many constructors. The job of each constructor is to allocate and initialize the state maintained by each StringBuilder object, Below is the internal state of a StringBuilder object:
 
-<ul>
-  <li><b>Maximum capacity</b> The maximum number of characters that can be placed in the string. The default is Int32.MaxValue (approximately 2 billion).  It's unusual to change this value. However, you might specify a smaller maximum capacity to ensure that you never create a string over a certain length. Once constructed, a StringBuilder's maximum capacity value can’t be changed.</li>
-  <li><b>Capacity</b> An Int32 value indicating the size of the character array being maintained by the StringBuilder. The default is 16. If you have some idea of how many characters you will place in the stringBuilder, you should use this number to set the capacity when constructing the StringBuilder object.
-  
-  When appending characters to the characters to the character array, the StringBuilder detects if the array is trying to grow beyond the array's capacity. If it is, the StringBuilder automatically doubles the capacity field, allocates a new array (the size of the new capacity), and copies the characters from the original array into the new array. The original array will be garbage collected. Dynamically growing the array hurts performance; avoid this by setting a good initial capacity.</li>
-  <li><b>Character array</b> An array of Char structures that maintains the set of characters in the "string". The number of characters is always less than or equal to the capacity and maximum capacity values. You can use the StringBuilder's <code>Length</code> property to obtain the number of characters used in the array. The Length is always less than or equal to the StringBuilder's capacity value. When constructing a StringBuilder, you can pass a String to initalize the character array. If you don't specify a string, the array initially contains no characters-that is, the Length property returns 0.</li>
-</ul> 
+For `Capacity` property, appending characters to the characters to the character array, the StringBuilder detects if the array is trying to grow beyond the array's capacity. If it is, the StringBuilder automatically doubles the capacity field, allocates a new array (the size of the new capacity), and copies the characters from the original array into the new array. The original array will be garbage collected. Dynamically growing the array hurts performance; avoid this by setting a good initial capacity.
+
 
 ## StringBuilder Members
 
 Unlike a String, a StringBuilder represents a mutable string. This means that most of StringBuilder's members change the contents in the array of characters and don't cause new objects to be allocated on the managed heap. A StringBuilder allocates a new object on only two occasions:
-<ul>
-  <li>You dynamically build a string whose length is longer than the capacity you've set.</li>
-  <li>You call StringBuilder's ToString method.</li>
-</ul> 
 
-Table below summarizes StringBuilder's members:
-
-| Member | Type | Description |
-| -------| ----------- | ----------- |
-| MaxCapacity | Read-only property | Returns the largest number of characters that can be placed in the string. |
-| Capacity | Read-only property | Gets or sets the size of the character array. Trying to set the capacity smaller than the string's length or bigger than MaxCapacity throws an ArgumentOutOfRangeException. |
-| EnsureCapacity | Method | Guarantees that the character array is at least the size specified. If the value passed is larger than the StringBuilder's current capacity, the current capacity increases.  If the current capacity is already larger than the value passed to this method, no change occurs. |
-| Length | Read/write property | Gets or sets the number of characters in the "string". This will likely be smaller than the character array's current capacity. Setting this property to 0 resets the StringBuilder’s contents to an empty string. |
-| ToString | Method | The parameterless version of this method returns a String representing the StringBuilder's character array. |
-| Chars | Read/write indexer property | Gets or sets the character at the specified index into the character array. In C#, this is an indexer (parameterful property) that you access using array syntax ([]). |
-| Clear | Method | Clears the contents of the StringBuilder object, the same as setting its Length property to 0. |
-| Append | Method | Appends a single object to the end of the character array, growing the array if necessary. The object is converted to a string by using the general format and the culture associated with the calling thread. |
-| Insert | Method | Inserts a single object into the character array, growing the array if necessary. |
-| AppendFormat | Method | Appends the specified objects to the end of the character array, growing the array if necessary. The objects are converted to strings by using the formatting and culture information provided by the caller. **AppendFormat is one of the most common methods used with StringBuilder objects** |
-| AppendLine | Method | Appends a blank line to the end of the character array, increasing the capacity of the array if necessary.|
-| Replace | Method | Replaces one character with another or one string with another from within the character array. |
-| Remove | Method | Removes a range of characters from the character array |
-| Equals | Method | Returns true only if both StringBuilder objects have the same maximum capacity, capacity, and characters in the array |
+ * You dynamically build a string whose length is longer than the capacity you've set ( a new array object is placed on the heap)
+ * You call StringBuilder's ToString method  ( a new string object is placed on the heap)
 
 One important thing to note about StringBuilder's methods is that most of them return a reference to the same StringBuilder object. this allows a conventient syntax to chain several operations together:
 ```C#
@@ -657,6 +831,7 @@ String s = sb.AppendFormat("{0} {1}", "Jeffrey", "Richter")
 ```
 
 You'll notice that the String and StringBuilder classes don't have full method parity; that is, String has ToLower, ToUpper, EndsWith, PadLeft, PadRight, Trim and so on, The StringBuilder class doesn't offer any of these methods, On the other hand, the StringBuilder class offers a richer `Replace` method that allows you to replace characters or strings in a portion of the string (not the whole string). It's unfortunate that there isn't complete parity between these two classes because now you must convert between String and StringBuilder to accomplish certain tasks. For example, to build up a string, convert all characters to uppercase, and then insert a string requires code like the following:
+
 ```C#
 // Construct a StringBuilder to perform string manipulations. 
 StringBuilder sb = new StringBuilder();
@@ -682,34 +857,26 @@ Console.WriteLine(s); // "JEFFREY-Marc-RICHTER"
 
 It's inconvenient and inefficient to have to write this code just because StringBuilder doesn't offer all of the operations that String does. In the future, I hope that Microsoft will add more string operation methods to StringBuilder to make it a more complete class.
 
-## Obtaining a String Representation of an Object: ToString
-
-You frequently need to obtain a string representation of an object. Usually, this is necessary when you want to display a numeric type (such as Byte, Int32, and Single) or a DateTime object to the user. Because the .NET Framework is an object-oriented platform, every type is responsible for providing code that converts an instance's value to a string equivalent. When designing how types should accomplish this, the designers of the FCL devised a pattern that would be used consistently throughout. In this section, I’ll describe this pattern.
-
-You can obtain a string representation for any object by calling the `ToString` method. A public, virtual, parameterless ToString method is defined by `System.Object` and is therefore callable using an instance of any type. Semantically, ToString returns a string representing the object’s current value, and this string should be formatted for the calling thread’s current culture; that is, the string representation of a number should use the proper decimal separator, digit-grouping symbol, and other elements associated with the culture assigned to the calling thread.
-
-`System.Object`'s implementation of ToString simply returns the full name of the object's type. This value isn't particularly useful, but it is a reasonable default for the many types that can't offer a sensible string. For example, what should a string representation of a FileStream or a Hashtable object look like?
-
-All types that want to offer a reasonable way to obtain a string representing the current value of the object should override the ToString method. Many of the core types built into the FCL (Byte, Int32, UInt64, Double, and so on) override their ToString method and return a culturally aware string. In the Visual Studio debugger, a datatip is displayed when the mouse is placed over a particular variable. The text shown in the datatip is obtained by calling the object’s ToString method. So, when you define a class, you should always override the ToString method so that you get good debugging support.
 
 ## Specific Formats and Cultures
 
 The parameterless of `ToString` method has two problems, First, the caller has no control over the formatting of the string. For example, an application might want to format a number into a currency string, decimal string, percent string, or hexadecimal string. Second, the caller can't easily choose to format a string by using a specific culture. This second problem is more troublesome for server-side application code than for client-side code. On rare occasions, an application needs to format a string by using a culture other than the culture associated with the calling thread. To have more control over string formatting, you need a version of the ToString method that allows you to specify precise formatting and culture information.
 
 Types that offer the caller a choice in formatting and culture implement the `System.IFormattable` interface:
+
 ```C#
-public interface IFormattable {
+public interface IFormattable 
+{
    String ToString(String format, IFormatProvider formatProvider);
 }
-```
-and the `IFormatProvider` interface signature:
-```C#
-public interface IFormatProvider {
+
+public interface IFormatProvider 
+{
    object GetFormat(Type formatType);
 }
 ```
 
-In the FCL, all of the base types (Byte, SByte, Int16/UInt16, Int32/UInt32, Int64/UInt64, Single, Double, Decimal, and DateTime) implement this interface, In addition, some other types, such as Guid, implement it. Finally every enumerated type definition will automatically implement the IFormattable interface so that a meaningful string symbol from an instance of the enumerated type can be obtained.
+In the FCL, all of the base types (`Byte`, `SByte`, `Int16`/`UInt16`, `Int32`/`UInt32`, `Int64`/`UInt64`, `Single`, `Double`, `Decimal`, and `DateTime`) implement this interface, In addition, some other types, such as `Guid`, implement it. Finally every enumerated type definition will automatically implement the `IFormattable` interface so that a meaningful string symbol from an instance of the enumerated type can be obtained.
 
 `IFormattable`'s `ToString` method takes two parameters. The first, format, is a string tells the method how the object should be formatted. ToString's second parameter, formatProvider, is an instance of a type that implements the `System.IFormatProvider` interface. This type supplies specific culture information to the ToString method. I'll discuss how shortly.
 
@@ -743,16 +910,17 @@ Console.WriteLine(DateTime.Now.ToString("d", new CultureInfo("en-US")));  // 28-
 Console.WriteLine(DateTime.Now.ToString("d", new CultureInfo("en-AU")));  // 28/02/2021
 
 // Note that it is the format that has impact on the date format like "dd-mm" vs "mm-dd", 
-//culture only have impact ont the separator "-" vs "/"
+// culture only have impact ont the separator "-" vs "/"
 ```
 
 So now that format strings are out of the way, let's turn to culture information. By default, strings are formatted using the culture information associated with the calling thread. The parameterless `ToString` method certainly does this, and so does `IFormattable`'s ToString if you pass null for the formatProvider parameter.
 
 Culture-sensitive information applies when you're formatting numbers (including currency, integers, floating point, percentages, dates, and times).
 
-When formatting a number, the ToString method sees what you've passed for the formatProvider parameter. If null is passed, ToString determines the culture associated with the calling thread by reading the `CurrentCulture` property. This property returns an instance of the `CultureInfo` type.
+When formatting a number, the ToString method sees what you've passed for the formatProvider parameter. **If null is passed, `ToString` determines the culture associated with the calling thread by reading the `CurrentCulture` property**. This property returns an instance of the `CultureInfo` type.
 
-Using this object, ToString reads this object's `NumberFormat` or `DateTimeFormat` property, depending on whether a number or date/time is being formatted, for example, you can pass a `CultureInfo` type object which implements `IFormatProvider`:
+Using this object, `ToString` reads this object's `NumberFormat` or `DateTimeFormat` property, depending on whether a number or date/time is being formatted, for example, you can pass a `CultureInfo` type object which implements `IFormatProvider`:
+
 ```C#
 public class CultureInfo : IFormatProvider, ... {
    ...
@@ -790,9 +958,14 @@ public sealed class NumberFormatInfo : IFormatProvider, ... {
           return info;
        }
        // info is null when you pass an CultureInfo object
-       if (formatProvider != null) {    // for brevity
+       if (formatProvider != null) 
+       {   
           info  = formatProvider.GetFormat(typeof(NumberFormatInfo)) as NumberFormatInfo;
           return info;
+       } 
+       else 
+       {
+          return CultureInfo.CurrentCulture._numInfo
        }
    }
 }
@@ -813,7 +986,7 @@ The `System.Globalization.CultureInfo` type is one of the very few types defined
 Decimal price = 123.54M;
 String s = price.ToString("C", new CultureInfo("vi-VN"));
 ```
-Internally, Decimal's ToString method sees that the formatProvider argument is not null and calls the object’s GetFormat method as follows (like Int32 struct implemention above):
+Internally, Decimal's ToString method sees that the formatProvider argument is not null and calls the object's GetFormat method as follows (like Int32 struct implemention above):
 ```C#
 NumberFormatInfo nfi = (NumberFormatInfo)formatProvider.GetFormat(typeof(NumberFormatInfo));
 ```
@@ -842,16 +1015,19 @@ public String ToString(String format, IFormatProvider formatProvider);
 ## Formatting Multiple Objects into a Single String
 
 So far, I've explained how an individual type formats its own objects. At times, however, you want to construct strings consisting of many formatted objects. For example, the following string has a date, a person's name, and an age:
+
 ```C#
 String s = String.Format("On {0}, {1} is {2} years old.", new DateTime(2012, 4, 22, 14, 35, 5), "Aidan", 9);
 Console.WriteLine(s);
 ```
-If you build and run this code where "en-US" is the thread’s current culture, you'll see the following line of output:
+
+If you build and run this code where "en-US" is the thread's current culture, you'll see the following line of output:
+
 ```
 On 4/22/2012 2:35:05 PM, Aidan is 9 years old.
 ```
 
-Internally, the Format method calls each object's ToString method to obtain a string representation for the object. Then the returned strings are all appended and the complete, final string is returned. This is all fine and good, but it means that all of the objects are formatted by using their general format and the calling thread's culture information.
+Internally, the Format method calls each object's `ToString` method to obtain a string representation for the object. Then the returned strings are all appended and the complete, final string is returned. This is all fine and good, but it means that all of the objects are formatted by using their general format and the calling thread's culture information.
 
 You can have more control when formatting an object if you specify format information within braces. For example, the following code is identical to the previous example except that I've added formatting information to replaceable parameters 0 and 2:
 ```C#
@@ -860,12 +1036,14 @@ You can have more control when formatting an object if you specify format inform
 String s = String.Format("On {0:D}, {1} is {2:E} years old.", new DateTime(2012, 4, 22, 14, 35, 5), "Aidan", 9);
 Console.WriteLine(s);
 ```
-If you build and run this code where "en-US" is the thread’s current culture, you'll see the following line of output:
+
+If you build and run this code where "en-US" is the thread's current culture, you'll see the following line of output:
+
 ```
 On Sunday, April 22, 2012, Aidan is 9.000000E+000 years old.
 ```
-When the Format method parses the format string, it sees that replaceable parameter 0 should have its IFormattable interface's ToString method called passing "D" and null for its two parameters. Likewise, Format calls replaceable parameter 2’s IFormattable ToString method, passing "E" and null. If the type doesn't implement the IFormattable interface, Format calls its parameterless ToString method inherited from Object (and possibly overridden), and the default format
-is appended into the resulting string.
+
+When the Format method parses the format string, it sees that replaceable parameter 0 should have its `IFormattable` interface's ToString method called passing "D" and null (which will be replaced with CurrentCulture) for its two parameters. Likewise, Format calls replaceable parameter 2's IFormattable ToString method, passing "E" and null. If the type doesn't implement the IFormattable interface, Format calls its parameterless ToString method inherited from Object (and possibly overridden), and the default format is appended into the resulting string.
 
 The String class offers several overloads of the static Format method. One version takes an object that implements the IFormatProvider interface so that you can format all of the replaceable parameters by using caller-specified culture information:
 ```C#
@@ -878,11 +1056,19 @@ If you're using StringBuilder instead of String to construct a string, you can c
 `System.Console` offers Write and WriteLine methods that also take format strings and replaceable parameters. However, there are no overloads of Console's Write and WriteLine methods that allow you to pass an IFormatProvider. If you want to format a string for a specific culture, you have to call String's Format method, first passing the desired IFormatProvider object and then pass the resulting string to Console's Write or WirteLine method. This shouldn't be a big deal because, as I said earlier, it's rare for client-code to format a string by using a culture other than the one assocaited with the calling thread.
 
 ## Providing You Own Custom Formatter
+
 It's possible for you to define a method that StringBuilder's `AppendFormat` or String's `Format` method will call whenever any object is being formatted into a string. In other words, instead of calling IFormattable interface's ToString for each object, AppendFormat can call a function you define, allowing you to format any or all of the objects in any way you want. What I'm about to describe also works with String's Format method.
 
-Let me explain this mechanism by way of an example. Let’s say that you’re formatting HTML text that a user will view in an Internet browser. You want all Int32 values to appear in bold. To accomplish this, every time an Int32 value is formatted into a String, you want to surround the string with
-HTML bold tags: `<B>` and `</B>`. The following code demonstrates how easy it is to do this:
+ Let's say that you’re formatting HTML text that a user will view in an Internet browser. You want all Int32 values to appear in bold. To accomplish this, every time an Int32 value is formatted into a String, you want to surround the string with HTML bold tags: `<B>` and `</B>`. The following code demonstrates how easy it is to do this:
+
 ```C#
+/* 
+public interface IFormattable   <------------just to compare with ICustomFormatter
+{
+   String ToString(String format, IFormatProvider formatProvider);
+}
+*/
+
 public interface ICustomFormatter {
    String Format(String format, Object arg, IFormatProvider formatProvider);  
 }
@@ -917,11 +1103,14 @@ internal sealed class BoldInt32s : IFormatProvider, ICustomFormatter {
    }
 }
 ```
-When you compile and run this code where “en-US” is the thread’s current culture, it displays the following output (your date may be different, of course):
+When you compile and run this code where "en-US" is the thread's current culture, it displays the following output (your date may be different, of course):
+
 ```
 Jeff <B>123</B> September 1
 ```
+
 Let's look inside the AppendFormat method to see exactly how it works. The following pseudocode shows how AppendFormat works:
+
 ```C#
 public StringBuilder AppendFormat(IFormatProvider formatProvider, String format, params Object[] args) {
    // If an IFormatProvider was passed, find out
@@ -946,7 +1135,7 @@ public StringBuilder AppendFormat(IFormatProvider formatProvider, String format,
       if (cf != null)
          argStr = cf.Format(argFormat, argObj, formatProvider); // Both ct and formatProvider is the same instance of BoldInt32s
                                                                 // it might be weird in the first sight that for the third DateTime argument you pass 
-                                                                //BoldInt32s as formatProvider, but the key is in the IFormatProvider.GetFormat method
+                                                                // BoldInt32s as formatProvider, but the key is in the IFormatProvider.GetFormat method
       
       // If there is no custom formatter
       if (argStr == null) {
@@ -1021,6 +1210,7 @@ public static Int32 Parse(String s, IFormatProvider provider); // Passes NumberS
 ```
 
 The DateTime type also offers a Parse method:
+
 ```C#
 public static DateTime Parse(String s, IFormatProvider provider, DateTimeStyles styles);
 
@@ -1053,18 +1243,16 @@ As you can see, this method returns true or false indicating whether the specifi
 
 ## Text Encodings and Unicode  
 
-
-There are two character sets in common use: Unicode and ASCII.  Unicode has an address space of approximately one million characters, of which about 100,000 are currently allocated. Unicode covers most spoken world languages, as well as some historical languages and special symbols. Unicode defines *code point* that can almost represent all characters of all language all over the world. Code point is numeric value (represented as hex) that ranges from 0x0 to 0x10FFFF (the high 11 bits are always 0). **The ASCII set is simply the first 128 characters of the Unicode set**, which covers most of what you see on a USstyle keyboard. ASCII predates Unicode by 30 years and is still sometimes used for its simplicity and efficiency: each character is represented by one byte.
+There are two character sets in common use: Unicode and ASCII.  Unicode has an address space of approximately one million characters, of which about 100,000 are currently allocated. Unicode covers most spoken world languages, as well as some historical languages and special symbols. Unicode defines **code point** that can almost represent all characters of all language all over the world. Code point is numeric value (represented as hex) that ranges from 0x0 to 0x10FFFF (the high 11 bits are always 0). **The ASCII set is simply the first 128 characters of the Unicode set**, which covers most of what you see on a USstyle keyboard. ASCII predates Unicode by 30 years and is still sometimes used for its simplicity and efficiency: each character is represented by one byte.
 
 The .NET type system is designed to work with the Unicode character set. ASCII is implicitly supported, though, by virtue of being a subset of Unicode.
 
 A *text encoding* maps characters from their numeric code point to a binary representation. In .NET, text encodings come into play primarily when dealing with text files or streams. When you read a text file into a string, a *text encoder* translates the file data from binary into the internal Unicode representation that the char and string types expect. A text encoding can restrict what characters can be repre‐ sented, as well as impacting storage efficiency.
 
 There are two categories of text encoding in .NET:
-<ul>
-  <li>Those that map Unicode characters to another character set</li>
-  <li>Those that use standard Unicode encoding schemes</li>
-</ul> 
+
+* Those that map Unicode characters to another character set
+* Those that use standard Unicode encoding schemes
 
 The first category contains legacy encodings such as IBM's EBCDIC and 8-bit character sets with extended characters in the upper-128 region that were popular prior to Unicode (identified by a code page). Think of a code page as an organized table containing a collection of characters, called the character set, which computers use to process text, allowing operating systems to distinctively identify a character through its corresponding code point value. For example, when a person types the euro currency symbol '€' in a language environment that uses the Windows 1252 code page, which is the code page that covers most of the West European and English languages on Windows, a code point value of '0xA4' is registered; and when the character '€' is saved, the data actually being written to disk will be the code point value '0xA4'. But for old IBM machine, '0xA4' might represent a totally different character.
 
@@ -1084,7 +1272,7 @@ We can see that UTF-8 uses 1 to 4 bytes to represent a character. Note the numbe
 
 ## UTF-16
 
-See this article for details: [Character encoding in .NET](https://docs.microsoft.com/en-us/dotnet/standard/base-types/character-encoding-introduction). UTF-16 uses 2 bytes to represent a character in most of time, but uses 4 bytes (2 "characters", shouldn't really say characters here, since each of these two characters doesn't represent a meanningful character, only two used toghter has the correct context) to represent a character/code point. Check the article for a *surrogate* pairs concept.
+See this article for details: [Character encoding in .NET](https://docs.microsoft.com/en-us/dotnet/standard/base-types/character-encoding-introduction). UTF-16 uses 2 bytes to represent a character in most of time, but uses 4 bytes (2 "characters", shouldn't really say characters here, since each of these two characters doesn't represent a meanningful character, only two used toghter has the correct context) to represent a character/code point. Check the article for a **surrogate** pairs concept (just need to know it exists).
 
 ## UTF-32
 
@@ -1092,6 +1280,7 @@ This encoding uses 4 bytes to represent a chatacter, which is exactly one to one
 in terms of memory usage and is therefore rarely used for saving or transmitting strings to a file or network. This encoding is typically used inside the program itself. Also note that UTF-32 can be used to convert from little-endian to big-endian and vice versa.
 
 ## In a summary
+
 UTF-8:
 
 	1 byte:       0 -     7F     (ASCII)
@@ -1108,14 +1297,14 @@ UTF-32:
 
     4 bytes:      0 - 10FFFF
 
-<div class="alert alert-info p-1" role="alert">
-    Now you see why you sometimes need to use UTF-8 to encoding UTF-16 (used by .NET), because if you transmit binary data that represent UTF-16 string, half of the bytes written would contain zeros.
-</div>
+Now you see why you sometimes need to use UTF-8 to encoding UTF-16 (used by .NET), because if you transmit binary data that represent UTF-16 string, half of the bytes written would contain zeros.
+
 
 ## Encodings: Converting Between Characters and Bytes
+
 In the CLR, all characters are represented as 16-bit Unicode code values and all strings are composed of 16-bit Unicode code value. This makes working with characters and string easy at run time.
 
-At Times, however, you want to save strings to a file or transmit them over a network. If the strings consist mostly of characters readable by English speaking people, saving or transmitting a set of 16 bit values isn't very efficient because half of the bytes written would contain zeros. Instead, it would be more efficient to encode the 16-bit values into a compressed array of bytes and then decode the array of bytes back into an array of 16-bit values.
+At times, however, you want to save strings to a file or transmit them over a network. If the strings consist mostly of characters readable by English speaking people, saving or transmitting a set of 16 bit values isn't very efficient because half of the bytes written would contain zeros. Instead, it would be more efficient to encode the 16-bit values into a compressed array of bytes and then decode the array of bytes back into an array of 16-bit values.
 
 Encoding is typically done when you want to send a string to a file or network stream by using the `System.IO.BinaryWriter` or `System.IO.StreamWriter` type. Decoding is typically done when you want to read a string from a file or network stream by using the ` System.IO.BinaryReader` or `System.IO.StreamReader` type. **If you don't explicitly select an encoding, all of these types default to using UTF-8. (UTF stands for Unicode Transformation Format.)** However, at times, you might want to explicitly encode or decode a string. Even if you don't want to explicitly do this, this section will give you more insight into the reading and writing of strings from and to streams.
 
@@ -1176,7 +1365,7 @@ Instead of calling one of Encoding's static properties, you could also construct
 ```C#
 public class UnicodeEncoding : Encoding {
    public UnicodeEncoding();
-   public UnicodeEncoding(bool bigEndian, bool byteOrderMark);  //BOM is prefixed into the encoding to indicate the endianness 
+   public UnicodeEncoding(bool bigEndian, bool byteOrderMark);  // BOM is prefixed into the encoding to indicate the endianness 
    public UnicodeEncoding(bool bigEndian, bool byteOrderMark, bool throwOnInvalidBytes);
    ...
    public override Decoder GetDecoder();
@@ -1198,6 +1387,7 @@ The GetByteCount/GetCharCount methods aren't that fast because they must analyze
 
 
 ## Encoding and Decoding Streams of Characters and Bytes
+
 Imagine that you're reading a UTF-16 encoded string via a System.Net.Sockets.NetworkStream object. The bytes will very likely stream in as chunks of data. a. In other words, you might first read 5 bytes from the stream, followed by 7 bytes. In UTF-16, each character consists of 2 bytes. So calling Encoding's GetString method passing the first array of 5 bytes will return a string consisting of just two characters. If you later call GetString, passing in the next 7 bytes that come in from the stream, GetString will return a string consisting of three characters, and all of the code points will have the wrong values!
 
 The data corruption problem occurs because none of the Encoding-derieved classes maintains any state in between calls to their methods. If you'll be encoding or decoding characters/bytes in chunks, you must do some additional work to maintain state between calls, preventing any loss of data.
@@ -1227,9 +1417,11 @@ One way is to send it in ASCII/UTF-8 like
 
     72 101 108 108 111 10 119 111 114 108 100 33
 
-But byte 10 might not be interpreted correctly as a newline at the other end (e.g. mail system). The byte 10 is corrupted in some systems so we can base 64 encode these bytes as a Base64 string:
+But byte value 10 (the sixth byte) might not be interpreted correctly as a newline at the other end (e.g. mail system). The byte 10 is corrupted in some systems so we can base 64 encode these bytes as a Base64 string:
 
-<pre>SGVsbG8Kd29ybGQh</pre>
+```
+SGVsbG8Kd29ybGQh
+```
 
 Which when encoded using ASCII looks like this:
 
@@ -1246,16 +1438,3 @@ To encode a base-64 string as an array of bytes, you call Convert's static `From
 
 ## Secure String
 To work on in the future
-
-<style type="text/css">
-.markdown-body {
-  max-width: 1800px;
-  margin-left: auto;
-  margin-right: auto;
-}
-</style>
-
-<link rel="stylesheet" href="./zCSS/bootstrap.min.css">
-<script src="./zCSS/jquery-3.3.1.slim.min.js"></script>
-<script src="./zCSS/popper.min.js"></script>
-<script src="./zCSS/bootstrap.min.js"></script>

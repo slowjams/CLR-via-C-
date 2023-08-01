@@ -1019,15 +1019,114 @@ public static class DelegateReflection {
 }
 ```
 
-<style type="text/css">
-.markdown-body {
-  max-width: 1800px;
-  margin-left: auto;
-  margin-right: auto;
-}
-</style>
+## Clousre 
 
-<link rel="stylesheet" href="./zCSS/bootstrap.min.css">
-<script src="./zCSS/jquery-3.3.1.slim.min.js"></script>
-<script src="./zCSS/popper.min.js"></script>
-<script src="./zCSS/bootstrap.min.js"></script>
+```C#
+for (int i = 0; i < 10; i++)
+{
+   Task.Factory.StartNew(() => Console.WriteLine(i));
+}
+Console.ReadLine();
+```
+
+The obvious intent of the code is to print out all the numbers from 0 to 9. They won’t necessarily be in order, because you are simply issuing work to the thread pool infrastructure, and thus you have no control over the order in which the tasks will run. But if you run the code, you will most likely have seen ten 10s on the screen The cause lies with the closure. Behind the scene, compiler re-write the method as:
+
+```C#
+class CaptureState {
+   public int i;
+   public void TheMethod() {
+      Console.WriteLine(i);
+   }
+}
+
+var magic = new CaptureState();
+for (magic.i = 0; magic.i < 10; magic.i++)
+{
+    Task.Factory.StartNew(magic.TheMethod);
+}
+
+// IL Code
+public class Program
+{
+   [CompilerGenerated]
+   private sealed class <>c__DisplayClass0_0
+   {
+      public int i;
+
+      internal void <Main>b__0()
+      {
+         Console.WriteLine(i);
+      }
+   }
+
+   public static void Main()
+   {
+      <>c__DisplayClass0_0 <>c__DisplayClass0_ = new <>c__DisplayClass0_0();
+      <>c__DisplayClass0_.i = 0;
+      while (<>c__DisplayClass0_.i < 10)
+      {
+         Task.Factory.StartNew(new Action(<>c__DisplayClass0_.<Main>b__0));
+         <>c__DisplayClass0_.i++;
+      }
+      Console.ReadLine();
+   }
+}
+```
+
+The fix is:
+
+```C#
+for (int i = 0; i < 10; i++)
+{
+   int toCaptureI = i;
+   Task.Factory.StartNew(() => Console.WriteLine(toCaptureI));
+}
+
+Console.ReadLine();
+```
+
+now compile re-write it as:
+
+```C#
+class CaptureState {
+   public int toCaptureI;
+   public void TheMethod() {
+      Console.WriteLine(toCaptureI);
+   }
+}
+
+for (int i = 0; i < 10; i++)
+{
+   var magic = new CaptureState();
+   magic.toCaptureI = i;
+   Task.Factory.StartNew(magic.TheMethod);
+}
+
+// IL code
+public class Program
+{
+   [CompilerGenerated]
+   private sealed class <>c__DisplayClass0_0
+   {
+      public int toCaptureI;
+
+      internal void <Main>b__0()
+      {
+         Console.WriteLine(toCaptureI);
+      }
+    }
+
+   public static void Main()
+   {
+      int num = 0;
+      while (num < 10)
+      {
+         <>c__DisplayClass0_0 <>c__DisplayClass0_ = new <>c__DisplayClass0_0();
+         <>c__DisplayClass0_.toCaptureI = num;
+         Task.Factory.StartNew(new Action(<>c__DisplayClass0_.<Main>b__0));
+          num++;
+      }
+      Console.ReadLine();
+   }
+}
+```

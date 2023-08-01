@@ -225,7 +225,7 @@ private struct StateMachine : IAsyncStateMachine
                      // When the Task completes, the ContinueWith task calls MoveNext
 
                      executeFinally = false; // We're not logically leaving the 'try' block
-                     return;   // <--------------------------Thread returns to caller(MyMethodAsync), then caller execute `return stateMachine.m_builder.Task;`, this is important
+                     return;   // <------------------------Thread returns to caller MyMethodAsync, then caller execute `return stateMachine.m_builder.Task;`, this is important
                   }
                   // 'Method1Async' completed synchronously
                   break;
@@ -341,7 +341,6 @@ private static async void Status() {
 You might think `await` causes the state machine to stay in the infinite while loop. so the control doesn't return after `Status();` therefore "After status" won't be displayed by the console. This is wrong, control does return to Main, and "After status" does display.
 
 This is because the when compiler generates state machine, it uses "return" to make the call returns to caller, now you see why "After status" displays.
-
 
 ####  Advance Topic
 
@@ -667,25 +666,6 @@ private Task<String> GetHttp() {
 
 So in a nutshell, the purpose of using `ConfigureAwait(false)` is to handle the situation that application developers do sth like `var result = DoSthAsync().Result`. As a more advanced library devlopers, we should babysitting the deadlock situation.
 
-```C#
-public class Task<TResult> : Task {
-   // ...
-   public new ConfiguredTaskAwaitable<TResult> ConfigureAwait(bool continueOnCapturedContext)  // see its usage at next chapter
-   {
-      return new ConfiguredTaskAwaitable<TResult>(this, continueOnCapturedContext);
-   }
-}
-
-public readonly struct ConfiguredTaskAwaitable<TResult>
-{
-   // ...
-   public ConfiguredTaskAwaitable<TResult>.ConfiguredTaskAwaiter GetAwaiter()  // await methodAsync().ConfigureAwait(false), await applys on ConfiguredTaskAwaitable, not the task
-   {
-      return m_configuredTaskAwaiter;
-   }
-}
-```
-
 ## Canceling I/O Operations
 
 In general, Windows doesn't give you a way to cancel an outstanding I/O operation. This is a feature that many developers would like, but it is actually quite hard to implement. After all, if you make a request from a server and then you decide you don’t want the response anymore, there is no way to tell the server to abandon your original request. The way to deal with this is just to let the bytes come back to the client machine and then throw them away. In addition, there is a race condition here—your request to cancel the request could come just as the server is sending the response. Now what should your application do? You'd need to handle this potential race condition occurring in your own code and decide whether to throw the data away or act on it. To assist with this, I recommend you implement a WithCancellation extension method that extends `Task<TResult>` (you need a similar overload that extends Task too) as follows
@@ -746,7 +726,6 @@ You'll see the program runs normally without throwing DivideByZeroException, whi
 
 see https://gigi.nullneuron.net/gigilabs/taskcompletionsource-by-example/
 
-
 ## `ValueTask`
 
 ```C#
@@ -777,7 +756,7 @@ public readonly struct ValueTask<TResult> : IEquatable<ValueTask<TResult>>
 Let's see why sometimes we need to use ValueTask. Below is a method that does an asynchronous job just for one time or 1% and in 99% does a synchronous job:
 
 ```C#
-public static string _myInformation;
+private static string _myInformation;
 
 // bad
 public async Task<string> GetInformation()
@@ -834,7 +813,7 @@ With IOT (smart watch, smart house device etc) becoming bigger and bigger, it ma
 // problematic traditional non-async enumerable approach
 static async Task Main(string[] args)
 {
-    foreach(var dataPoint in await FetchIOTData())  // you wait for all the data points available first, then you print each data points
+    foreach(var dataPoint in await FetchIOTData())
     {
         Console.WriteLine(dataPoint);
     }
@@ -846,7 +825,7 @@ static async Task<IEnumerable<int>> FetchIOTData()
     List<int> dataPoints = new List<int>();
     for (int i = 1; i <= 10; i++)
     {
-        await Task.Delay(1000);  // simulate waiting for data to come through. 
+        await Task.Delay(1000);  //Simulate waiting for data to come through. 
         dataPoints.Add(i);
     }
     return dataPoints;
@@ -872,7 +851,7 @@ static async IAsyncEnumerable<int> FetchIOTData()
 {
     for (int i = 1; i <= 10; i++)
     {
-        await Task.Delay(1000);  // simulate waiting for data to come through. 
+        await Task.Delay(1000);  //Simulate waiting for data to come through. 
         yield return i;
     }
 }
@@ -885,10 +864,10 @@ IAsyncEnumerator<int> e = FetchIOTData().GetAsyncEnumerator();
 
 try
 {
-   while (await e.MoveNextAsync()) {    // you start to process each data point when it is ready instead of waiting for all data points to be ready
-      Console.Write(e.Current + " ");    
-   }                                     
-}                                   
+   while (await e.MoveNextAsync()) {
+      Console.Write(e.Current + " ");   // <------------ Console.Write method is quite fast, if we do heavy process (takes more than 1 sec) this dataPoint instead of Console.Write
+   }                                    // because of `ValueTask<bool> MoveNextAsync()`, when we start to prcoess the next dataPoint which already be ready, then there is 
+}                                       // no Task instance allocated on heap, now you see why IAsyncEnumerable uses ValueTask<bool> rathern than Task<bool> for MoveNextAsync()
 finally 
 { 
    if (e != null) await e.DisposeAsync(); 

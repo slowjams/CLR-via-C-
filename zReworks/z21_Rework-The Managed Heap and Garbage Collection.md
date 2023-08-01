@@ -256,7 +256,7 @@ This post describes how JIT compiler supports this feature in details [Understan
 
 *The "no longer used" address in the table is very important. It makes the garbage collector very efficient. It can collect an object reference, even if it is used inside a method and that method hasn't finished executing yet.*
 
-When you compile your assembly by using the C# compiler's /debug switch, the compiler applies a `System.Diagnostics.DebuggableAttribute` with its DebuggingModes' DisableOptimizations flag set into the resulting assembly. At run time, when compiling a method, the JIT compiler sees this flag set, and **artificially extends the lifetime of all roots to the end of the method** (which makes sense, as we as developers want to debug sth that we don't want to be GCed). For my example, the JIT compiler tricks itself into believing that the t variable in Main must live until the end of the method. So, if a garbage collection were to occur, the garbage collector now thinks that t is still a root and that the Timer object that t refers to will continue to be reachable. The Timer object will survive the collection, and the TimerCallback method will get called repeatedly until Console. ReadLine returns and Main exits.
+When you compile your assembly by using the C# compiler's /debug switch, the compiler applies a `System.Diagnostics.DebuggableAttribute` with its DebuggingModes' DisableOptimizations flag set into the resulting assembly. At run time, when compiling a method, the JIT compiler sees this flag set, and **artificially extends the lifetime of all roots to the end of the method** (which makes sense, as we as developers want to debug sth that we don't want to be GCed). For my example, the JIT compiler tricks itself into believing that the t variable in Main must live until the end of the method. So, if a garbage collection were to occur, the garbage collector now thinks that t is still a root and that the Timer object that t refers to will continue to be reachable. The Timer object will survive the collection, and the TimerCallback method will get called repeatedly until Console. ReadLine returns and Main exits. Please this behaviour did change in .net core 3 see this post https://github.com/dotnet/runtime/issues/36265 in regards to `[MethodImpl(MethodImplOptions.NoInlining)]` and `TieredCompilation`
 
 So in the release build, you might say we can add assign a null to the variable so GC will think it is still reachable:
 
@@ -785,6 +785,7 @@ public abstract class SafeHandle : CriticalFinalizerObject, IDisposable   // nam
       // If ownsHandle is false, return
       // Set flag indicating that this resource has been released
       // Call virtual ReleaseHandle method
+      ReleaseHandle();
       // Call GC.SuppressFinalize(this) to prevent Finalize from being called only when calling from Dispose(true) which means you manually call Dispose() from the managed object
       // If ReleaseHandle returned true, return
       // If we get here, fire ReleaseHandleFailed Managed Debugging Assistant (MDA)
@@ -896,7 +897,7 @@ class MyClass : IDisposable
 }
 ```
 
-`MyClass` doesn't need a finalizer anymore, since it doesn't own any unmanaged resource. As a consequence, it's not required to implement the full Dipose pattern.
+`MyClass` doesn't need a finalizer anymore, since it doesn't own any unmanaged resource. As a consequence, it's not required to implement the full Dipose pattern (still need to implement `IDisposable`).
 
 The first thing to notice about the `SafeHandle` class is that it is derived from `CriticalFinalizerObject`, which is defined in the `System.Runtime.ConstrainedExecution` namespace. The CLR treats this class and classes derived from it in a very special manner. In particular, the CLR endows this class with three cool features:
 
@@ -1261,7 +1262,8 @@ A class that wraps a native resource that has a limited quantity available shoul
 Here is some code that demonstrates the use and effect of the memory pressure methods and the HandleCollector class: 
 ```C#
 class Program {
-   static void Main(string[] args) {
+   static void Main(string[] args) 
+   {
       MemoryPressureDemo(0); // 0 causes infrequent GCs
       MemoryPressureDemo(10 * 1024 * 1024); // 10MB causes frequent GCs
 
@@ -1467,7 +1469,10 @@ public struct GCHandle
    public void Free()
    {
        IntPtr handle = Interlocked.Exchange(ref _handle, IntPtr.Zero);  // set handle to zero
-       InternalFree(GetHandleValue(handle));
+       InternalFree(GetHandleValue(handle));   // free the handler in the CLR's interal GC handle table, not freeing the object for Weak and WeakTrackResurrection       
+                                               // because they are not considered as root (that's why we call them "monitoring an object's existence"), and GC will collect 
+                                               // objects in its own way. But for Normal and Pinned, you do need to call Free() to let GC to collect the object (that's 
+                                               // why we call them "controlling an object's lifetime" )                                 
    }
 
    // Instance property to get/set the entry's object reference
@@ -1491,8 +1496,8 @@ public struct GCHandle
    // Instance property that returns true if index is not 0
    public Boolean IsAllocated => (nint)_handle != 0;
 
-   // For a pinned entry, this returns the address of the object
-   public IntPtr AddOfPinnedObject();
+   // For a pinned entry, this returns the actual memory address of the object
+   public IntPtr AddOfPinnedObject();  // <------------------for GCHandleType.Pinned
 
    // ...
 }
@@ -1536,13 +1541,11 @@ Below is a demo that uses `Weak` and `WeakTrackResurrection`:
 
 ```C#
 // prerequisite that you need to understand GCHandle
-static void Main(string[] args)
+static void Main_Prerequisite(string[] args)
 {
     Test();
 
     GC.Collect();
-
-    Console.ReadLine();
 
     /* output is
     ConsoleApp_z21_GarbageCollection.Person
@@ -1556,7 +1559,7 @@ static void Test()  // you need to wrap into a separate method for GC to collect
 
     var handle = GCHandle.Alloc(p, GCHandleType.Weak);
 
-    handle.Free();  // when you call Free, you only 
+    handle.Free();  // when you call Free, you only un-associate the handler's IntPtr (index) from GC handle table, the underlying object is still in memory which hasn't been GCed
 
     Console.WriteLine(p);   // p still in the memory
 }
@@ -1570,8 +1573,129 @@ public class Person
     }
 }
 //-----------------<<
-```
 
+//----------------------------------V
+static void Main_Weak(string[] args)
+{
+    var handle = GenerateHandle();
+
+    GC.Collect();  
+                        // <------------note that the object (new Person()) created in Test method still exist in the memory (because Person has Finalize)
+                        // but handle.Target is null now, while for WeakTrackResurrection handle.Target won't be null as the next code snippet below shows
+    PrintHandle(handle);
+                       
+    /* output can either be
+    
+    null          // <-------------------------------------------------- compare with Main_WeakTrackResurrection_First that prints ConsoleApp_z21_GarbageCollection.Person
+    "Destroyed"
+    
+    or
+
+    "Destroyed"
+    null
+    */
+
+    // which makes sense, after GC.Collect(), the main thread can start first (fist output) or the special thread (that calls Finalize method ) can start first (second output) 
+    // it also proves that the special thread can run in parallel with application thread 
+}
+
+static GCHandle GenerateHandle()
+{
+    return GCHandle.Alloc(new Person(), GCHandleType.Weak);
+}
+
+static void PrintHandle(GCHandle handle)
+{
+    Console.WriteLine(handle.Target == null ? "null" : handle.Target);
+}
+//----------------------------------Ʌ
+
+//---------------------------------------------------V
+static void Main_WeakTrackResurrection_First(string[] args)
+{
+    var handle = GenerateHandle();
+
+    GC.Collect();
+
+    PrintHandle(handle);
+
+    /* output can have the two line in different sequence
+    ConsoleApp_z21_GarbageCollection.Person   // <-------------------------------------------------------------
+    "Destroyed"
+    */
+}
+
+static void Main_WeakTrackResurrection_Two(string[] args)
+{
+    var handle = GenerateHandle();
+
+    GC.Collect();
+
+    PrintHandle(handle);
+    
+    Console.ReadLine();
+
+    /* output can have the two line in different sequence
+    ConsoleApp_z21_GarbageCollection.Person
+    "Destroyed"
+    */
+}
+
+static void Main_WeakTrackResurrection_Three(string[] args)
+{
+    var handle = GenerateHandle();
+
+    GC.Collect();
+
+    GC.Collect();  // you need to trigger GC twice to collect the Person object
+
+    PrintHandle(handle);
+    
+    Console.ReadLine();
+
+    /* the first two lines can be reverse like the example above
+    ConsoleApp_z21_GarbageCollection.Person
+    "Destroyed"
+    */
+
+    // what? looks like the Person object (referenced by handle.Target) still exsited in the memory after calling the second GC.Collect()
+    // see the below code snippet you will see why 
+}
+
+static void Main_WeakTrackResurrection_Four(string[] args)
+{
+    var handle = GenerateHandle();
+
+    GC.Collect();
+
+    GC.WaitForPendingFinalizers();  // suspends the current thread until the specail thread that is processing the queue of finalizers has emptied that queue
+
+    GC.Collect();
+
+    PrintHandle(handle);
+    
+    Console.ReadLine();
+
+    /* the first two lines order will not be reverse any more
+    "Destroyed"
+    null
+    */
+
+    // what? looks like the Person object (referenced by handle.Target) still exsited in the memory after calling the second GC.Collect()
+    // see the below code snippet you will see why 
+}
+
+static GCHandle GenerateHandle()
+{
+    return GCHandle.Alloc(new Person(), GCHandleType.WeakTrackResurrection);
+}
+
+static void PrintHandle(GCHandle handle)
+{
+    Console.WriteLine(handle.Target == null ? "null" : handle.Target);
+}
+//---------------------------------------------------Ʌ
+```
 
 Now that you have an understanding of the mechanism, let's take a look at when you'd use them. The easiest flags to understand are the Normal and Pinned flags, so let's start with these two. Both of these flags are typically used when interoperating with native code.
 
@@ -1608,7 +1732,7 @@ public class App {
       gch.Free();
    }
    
-   // native will call this method providing its native handle (created in low-level using C++) and IntPtr recevied from EnumWindows method
+   // native code will call this method providing its native handle (created in low-level using C++) and IntPtr recevied from EnumWindows method
    private static bool CaptureEnumWindowsProc(int handle, IntPtr param) {
       GCHandle gch = GCHandle.FromIntPtr(param);   // retrieve the GC handle table entry that associate with TextWriter instance
       TextWriter tw = (TextWriter)gch.Target;      
@@ -1617,16 +1741,18 @@ public class App {
    }
 }
 ```
-Notice that in this scenario, the native code is not actually using the managed object itself; the native code wants a way just to reference the object. In some scenarios, the native code needs to actually use the managed object. In these scenarios, the managed object must be pinned. Pinning prevents the garbage collector from moving/compacting the object. A common example is when you want to pass a managed String object to a W32 function. In this case, the String object must be pinned because you can't pass the reference of a managed object to native code and then have the garbage collector move the object in memory. If the String object were moved, the native code would either be reading or writing to memory that no longer contained the String object's characters-this will surely cause the application to run unpredictably.
+
+Notice that in this scenario, the native code is not actually using the managed object itself in the native code; the native code wants a way just to reference the object and pass it to managed callback. In some scenarios, the native code needs to actually use the managed object. In these scenarios, the managed object must be pinned. Pinning prevents the garbage collector from moving/compacting the object. A common example is when you want to pass a managed String object to a W32 function. In this case, the String object must be pinned because you can't pass the reference of a managed object to native code and then have the garbage collector move the object in memory. If the String object were moved, the native code would either be reading or writing to memory that no longer contained the String object's characters-this will surely cause the application to run unpredictably.
 
 When you use the CLR's P/Invoke mechanism to call a method, the CLR pins the argument for you automatically and unpins them when the native method returns. So, in most cases, you never have to use the GCHandle type to explicitly pin any managed object yourself. You do have to use the GCHandle type explicitly when you need to pass the pointer to a managed object to native code; then the native function returns, but native code might still need to use the object later. Th most common example of this is when performing asynchronous I/O operations.
 
-Let's say that you allocate a byte array that should be filled as data comes in from a socket. Then, you would call GCHandle's Alloc method, passing in a reference to the array object and the Pinned flag. Then, using the returned GCHandle instance, you call the `AddrOfPinnedObject` method. THis returns an IntPtr that is the actual address of the pinned object in the managed heap; you'd then pass this address into the native function, which will return back to managed code immediately. While the data is coming from the socket, this byte array buffer should not move in memory; preventing this buffer from moving is accomplished by using the Pinned flag. When then asynchronous I/O operations has completed, you'd call GCHandle's Free method, which will allow a future garbage collection to move the buffer. You managed code should still have a reference to the buffer so that you can access the data, and this reference will prevent a garbage collection from freeing the buffer from memory completely.
+Let's say that you allocate a byte array that should be filled as data comes in from a socket. Then, you would call GCHandle's Alloc method, passing in a reference to the array object and the Pinned flag. Then, using the returned GCHandle instance, you **call the `AddrOfPinnedObject` method, which returns an IntPtr that is the actual address of the pinned object in the managed heap; you'd then pass this address into the native function**, which will return back to managed code immediately. While the data is coming from the socket, this byte array buffer should not move in memory; preventing this buffer from moving is accomplished by using the Pinned flag. When then asynchronous I/O operations has completed, you'd call GCHandle's Free method, which will allow a future garbage collection to move the buffer. You managed code should still have a reference to the buffer so that you can access the data, and this reference will prevent a garbage collection from freeing the buffer from memory completely.
 
 It is also worth mentioning that C# offers a `fixed` statement that effectively pins an object over a block of code. Here is some code that demonstrates its use:
 
 ```C#
-unsafe public static void Go() {
+unsafe public static void Go() 
+{
    // Allocate a bunch of objects that immediately become garbage
    for (Int32 x = 0; x < 10000; x++) 
       new Object();
@@ -1649,33 +1775,122 @@ unsafe public static void Go() {
    }
 }
 ```
+
 Using C#'s `fixed` statement is more efficient that allocating a pinned GC handle. What happens is that the C# compiler emits a special "pinned" flag on the pbytes local variable. During a garbage collection, the GC examines the contents of this root, and if the root is not null, it knows not to move the object referred to by the variable during the compaction phase. The C# compiler emits IL to initialize the pbytes local variable to the address of the object at the start of a fixed block, and the compiler emits an IL instruction to set the pbytes local variable back to null at the end of the fixed block so that the variable doesn't refer to any object, allowing the object to move when the next garbage collection occurs.
 
-Now, let's talk about the next two flags, `Weak` and `WeakTrackResurrection`. These two flags can be used in scenarios when interoperating with native code, but they can also be used in scenarios that use only managed code. The Weak flag lets you know when an object has been determined to be garbage but the object's memory is not guaranteed to be reclaimed yet. The WeakTrackResurrection flag lets you know when an object's memory has been reclaimed. Of the two flags, the `Weak` flag is much more commonly used than the `WeakTrackResurrection` flag. In fact, I've never seen anyone use the `WeakTrackResurrection` flag in a real application. (probably when using `WeakTrackResurrection` flag and GC contents is not null, the object might be resurrected during finalization, then if you create another reference to refer this object, this object won't be collected in next GC even though its finalizer has executed).
+Now, let's talk about the next two flags, `Weak` and `WeakTrackResurrection`. These two flags can be used in scenarios when interoperating with native code, but they can also be used in scenarios that use only managed code. The Weak flag lets you know when an object has been determined to be garbage but the object's memory is not guaranteed to be reclaimed yet. The WeakTrackResurrection flag lets you know when an object's memory has been reclaimed. Of the two flags, the `Weak` flag is much more commonly used than the `WeakTrackResurrection` flag. In fact, I've never seen anyone use the `WeakTrackResurrection` flag in a real application. Let's see why `WeakTrackResurrection` is rarely used and potentially could be a bug:
+
+```C#
+static void Main(string[] args)
+{
+    var handle = GenerateHandle();
+    GC.Collect();
+    GC.WaitForPendingFinalizers();
+    TestWeakTrackResurrection(handle);
+
+    Console.ReadLine();
+}
+
+static GCHandle GenerateHandle()
+{
+    return GCHandle.Alloc(new Person() { Name = "John" }, GCHandleType.WeakTrackResurrection);
+}
+
+static void TestWeakTrackResurrection(GCHandle handle)
+{
+    Person p = (Person)handle.Target;  // <--------------------dangerous bug, now you retireve this obejct back and use it when its Finalize has already been called
+    Console.WriteLine(p.Name);   // Finalize has been called, the Name is "NA" now, image if the Person class has a native resource rather than a string Name
+}
+
+public class Person
+{
+    public string Name { get; set; }
+    ~Person()
+    {
+        Console.WriteLine("Destroyed");
+        Name = "NA";
+    }
+}
+
+/* output is
+Destroyed
+NA
+*/
+```
 
 At this point, Object-B can be garbage collected if no other roots are keeping it alive. When Object-A wants to call Object-B’s method, it would query GCHandle’s read-only Target property. If this property returns a non-null value, then Object-B is still alive. Object-A's code would then cast the returned reference to Object-B’s type and call the method. If the Target property returns null, then Object-B has been collected (but not necessarily finalized) and Object-A would not attempt to call the method. At this point, Object-A’s code would probably also call GCHandless Free method to relinquish the GCHandle instance.
 
 Because working with the GCHandle type can be a bit cumbersome and because it requires elevated security to keep or pin an object in memory, the System namespace includes a `WeakReference<T>` class to help you:
+
 ```C#
-public sealed class WeakReference<T> : ISerializable where T : class {
+public sealed class WeakReference<T> : ISerializable where T : class  // introduced in .NET 4.5
+{
    public WeakReference(T target);
    public WeakReference(T target, Boolean trackResurrection); 
+
+   ~WeakReference();
+
    public void SetTarget(T target);
    public Boolean TryGetTarget(out T target);
 }
 ```
+
 This class is really just an object-oriented wrapper around a GCHandle instance: logically, its constructor calls GCHandle's Alloc, its TryGetTarget method queries GCHandle’s Target property, its SetTarget method sets GCHandle's Target property, and its Finalize method (not shown in the preceding code, because it's protected) calls GCHandle's Free method. In addition, no special permissions are required for code to use the `WeakReference<T>` class because the class supports only weak references; it doesn't support the behavior provided by GCHandle instances allocated with a GCHandleType of Normal or Pinned.  The downside of the `WeakReference<T>` class is that an instance of it must be allocated on the heap. So the `WeakReference<T>` class is a heavier-weight object than a GCHandle instance. 
 
-<div class="alert alert-info p-1" role="alert">
-    When developers start learning about weak references, they immediately start thinking that they are useful in caching scenarios, For example, they think it would be cool to construct a bunch of objects that contain a lot of data and then to create weak references  to these objects. When the program needs the data, the program checks the weak reference to see it th eobject that contains the data is still around, and if it is, the program just uses it; the program experiences high performance. However, if a garbage collection occurred, the objects that contained the data would be destroyed, and when the program has to re-create the data, the program experiences lower performance.
-    </br></br>
-    The problem with this technique is the following: garbage collections do not only occur when memory is full or close to full. Instead, garbage collections occur whenever generation 0 is full. So objects are being tossed out of memory much more freuently than desired, and your application's performance suffers greatly.
-</div>
-
-Developers frequently want to assocaite a piece of data with another entity. For example, you can associate data with a thread or with an AppDomain. It is also possible to associate data with an individual object by using the `System.Runtime.CompilerServices.ConditionalWeakTable <TKey,TValue>` class, which looks like this:
+Note that there is old version of `WeakReference` that you shouldn't use, but I still list the code here:
 
 ```C#
-public sealed class ConditionalWeakTable<TKey, TValue> where TKey : class where TValue : class 
+public class WeakReference : ISerializable   // <--------------legacy (has been around since .NET 1.1), you shoudn't use this one, use `WeakReference<T>` instead
+{
+   public WeakReference(object? target);
+   public WeakReference(object? target, bool trackResurrection);
+   protected WeakReference(SerializationInfo info, StreamingContext context);
+
+   ~WeakReference();
+
+   public virtual bool IsAlive { get; }
+   public virtual object? Target { get; set; }
+   public virtual bool TrackResurrection { get; }
+}
+```
+
+let's see why this WeakReference is not suitable to use:
+
+```C#
+WeakReference ref = new WeakReference(new MyObject());
+// ... pass ref to the method contains the code below
+if (ref.IsAlive)
+{                                          // <--------------------GC can occur here
+    DoSomething(ref.Target as MyObject);   // ref.Target can still be null even ref.IsAlive is true because of thread race, GC thread can run immediately it and collect the object
+}
+```
+
+`WeakReference<T>` can solve race problem as:
+
+```C#
+WeakReference<MyObject> ref = new WeakReference<MyObject>(new MyObject());
+// ... pass ref to the method contains the code below
+MyObject obj;
+if (ref.TryGetTarget(out obj))
+{
+    DoSomething(obj);
+}
+```
+
+
+When developers start learning about weak references, they immediately start thinking that they are useful in caching scenarios, For example, they think it would be cool to construct a bunch of objects that contain a lot of data and then to create weak references  to these objects. When the program needs the data, the program checks the weak reference to see it th eobject that contains the data is still around, and if it is, the program just uses it; the program experiences high performance. However, if a garbage collection occurred, the objects that contained the data would be destroyed, and when the program has to re-create the data, the program experiences lower performance.
+
+The problem with this technique is the following: garbage collections do not only occur when memory is full or close to full. Instead, garbage collections occur whenever generation 0 is full. So objects are being tossed out of memory much more freuently than desired, and your application's performance suffers greatly.
+
+Weak references can be used quite effectively in caching scenarios, but building a good cache algorithm that finds the right balance between memory consumption and speed
+is very complex.
+
+There is another scenario in which WeakReference may make sense. I call this the "secondary index" feature. Suppose you have an in-memory cache of objects, all indexed by some key. This could be as simple as `Dictionary<string, Person>` as string key is surname as the primary index, and represents the most common lookup pattern, the master table, if you will. However, you also want to look up these objects with another key, say a last name. Maybe you want a dozen other indexes. Using standard strong references, you could have additional indexes, such as `Dictionary<int, Person>` as int key for age, etc. When it comes time to update the cache, you then have to modify all of these indexes to ensure that the Person object gets garbage collected when no longer needed.This might be a pretty big performance hit to do this every time there is an update. Instead, you could spread that cost around by having all of the secondary indexes use WeakReference instead: `Dictionary<DateTime, WeakReference<Person>>`, now you only need to remove the entry from primary index's dictionary.
+
+Developers frequently want to assocaite a piece of data with another entity. For example, you can associate data with a thread or with an AppDomain. It is also possible to associate data with an individual object by using the `System.Runtime.CompilerServices.ConditionalWeakTable<TKey,TValue>` class, which looks like this:
+
+```C#
+public sealed class ConditionalWeakTable<TKey, TValue> where TKey : class where TValue : class  // only support `Weak`, not `WeakTrackResurrection`
 {
    public ConditionalWeakTable();
    public void Add(TKey key, TValue value);
@@ -1684,17 +1899,61 @@ public sealed class ConditionalWeakTable<TKey, TValue> where TKey : class where 
    public TValue GetOrCreateValue(TKey key);
    public Boolean Remove(TKey key);
 
-   public delegate TValue CreateValueCallback(TKey key); // Nested delegate definition
+   public delegate TValue CreateValueCallback(TKey key);   // nested delegate definition
 }
 ```
-If you want to associate some arbitrary data with one or more objects, you would first create an instance of this class. Then, call the Add method, passing in a reference to some object for the key parameter and the data you want to associate with the object in the value parameter. If you attempt to
-add a reference to the same object more than once, the Add method throws an ArgumentException; to change the value associated with an object, you must remove the key and then add it back in with the new value.
 
-What makes the ConditionalWeakTable class so special is that it guarantees that the value remains in memory as long as the object identified by the key is in memory. 
+If you want to associate some arbitrary data with one or more objects, you would first create an instance of this class. Then, call the Add method, passing in a reference to some object for the key parameter and the data you want to associate with the object in the value parameter. If you attempt to add a reference to the same object more than once, the Add method throws an ArgumentException; to change the value associated with an object, you must remove the key and then add it back in with the new value.
 
-Here is some code that demonstrates the use of the ConditionalWeakTable class. It allows you to call the GCWatch extension method on any object passing in some String tag. Then it notifies you via the console window whenever that particular object gets garbage collected:
+What makes the ConditionalWeakTable class so special is that **it guarantees that the value remains in memory as long as the object identified by the key is in memory**. 
+
+Let's say one practical example, suppose you want to dynamically add a field to an object like what javascript/python can do, .net has introduced `ExpandoObject`:
+
 ```C#
-static void Main(string[] args) {
+dynamic a = new ExpandoObject();
+a.Field = "Hello";
+```
+
+We could use `ExpandoObject` with extension method:
+
+```C#
+class Program
+{
+   static void Main(string[] args)
+   {
+      var a = new MyClass();
+ 
+      a.Properties().Field = "Hello";
+   }
+}
+
+static class DynamicProperties
+{
+   static readonly IDictionary<object, dynamic> PropertyDict = new Dictionary<object, dynamic>();
+ 
+   public static dynamic Properties(this object key)
+   {
+      dynamic expando;
+      if (!PropertyDict.TryGetValue(key, out expando))
+      {
+         expando = new ExpandoObject();
+         PropertyDict[key] = expando;
+      }
+      return expando;
+   }
+}
+ 
+class MyClass { }
+```
+
+The problem with this approach, though, is that as soon as an object is added to a Dictionary, as either a key or a value, that Dictionary takes a strong reference to it, and so the object's lifetime is now tied to that of the Dictionary – and, in this case, the lifetime of the MyClass we originally assigned to a is now determined by the lifetime of DynamicProperties.PropertyDict, unless we remember to manually remove it once we're finished with a.
+
+`ConditionalWeakTable<TKey, TValue>` solves the problem of Dictionary highlighted above by not holding a reference to the TKey objects; rather, it holds a table of special key-value pairs. These key-value pairs, called DependentHandles internally, hold a strong reference from the key to the value, but do not hold a strong reference to the key – the key is not kept alive by the ConditionalWeakTable, unlike a Dictionary. Also, the value is only held alive by they key, and when the key is garbage collected, the value is too (assuming nothing else holds a reference to it).
+
+Here is some code that demonstrates another use of the ConditionalWeakTable class. It allows you to call the GCWatch extension method on any object passing in some String tag. Then it notifies you via the console window whenever that particular object gets garbage collected:
+```C#
+static void Main(string[] args) 
+{
    Object o = new Object().GCWatch("My Object created at " + DateTime.Now);
    GC.Collect(); // We will not see the GC notification here
    GC.KeepAlive(o); // Make sure the object o refers to lives up to here
@@ -1724,55 +1983,8 @@ static class GCWatcher {
       }
 
       ~NotifyWhenGCd() {
-         Console.WriteLine("GC'd: " + m_value);
+         Console.WriteLine("GC'd: " + m_value);   // well, not really GCed at this stage, I thnk the author mean in the next generation
       }
    }
 }
 ```
-
-<!-- ![alt text](./zImages/16-1.png "Title") -->
-
-<!-- [link text](https://) -->
-
-<!-- <code>&lt;T&gt;</code> -->
-
-<!-- <div class="alert alert-info p-1" role="alert">
-    
-</div> -->
-
-<!-- <div class="alert alert-info p-1" role="alert">
-    <h3 class="mt-0">XXX</h2>
-</div> -->
-
-<!-- <div class="alert alert-info pt-2 pb-0" role="alert">
-    <ul class="pl-1">
-      <li></li>
-      <li></li>
-    </ul>  
-</div> -->
-
-<!-- <ul>
-  <li><b></b></li>
-  <li><b></b></li>
-  <li><b></b></li>
-  <li><b></b></li>
-</ul>  -->
-
-<!-- ![alt text](./zImages/16-1.png "Title") -->
-
-<!-- <span style="color:red">hurt</span> -->
-
-<!-- <sup>1</sup> -->
-
-<style type="text/css">
-.markdown-body {
-  max-width: 1800px;
-  margin-left: auto;
-  margin-right: auto;
-}
-</style>
-
-<link rel="stylesheet" href="./zCSS/bootstrap.min.css">
-<script src="./zCSS/jquery-3.3.1.slim.min.js"></script>
-<script src="./zCSS/popper.min.js"></script>
-<script src="./zCSS/bootstrap.min.js"></script>

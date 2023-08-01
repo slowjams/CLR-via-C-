@@ -185,10 +185,10 @@ So, unlike boxing, <span style="color:blue">unboxing doesn’t involve the copyi
 
 Obviously, boxing and unboxing/copy operations <span style="color:red">hurt</span> your application’s performance in terms of both speed and memory.
 
-Internally, here’s exactly what happens when a boxed value type instance is unboxed:
+Internally, here's exactly what happens when a boxed value type instance is unboxed:
 <ul>
   <li><b>If the variable containing the reference to the boxed value type instance is null, a NullReferenceException is thrown.</b></li>
-  <li><b>If the reference doesn’t refer to an object that is a boxed instance of the desired value type, an InvalidCastException is thrown.</b></li>
+  <li><b>If the reference doesn't refer to an object that is a boxed instance of the desired value type, an InvalidCastException is thrown.</b></li>
 </ul> 
 
 The second item in the preceding list means that the following code will not work as you might expect.
@@ -374,6 +374,7 @@ public static void Main() {
     Based on the quirk result above, now you know why value types should be immutable,  it is recommended that value types have their fields marked as <code>readonly</code>
 </div>
 
+
 ## Object Equality and Identity
 
 ```C#
@@ -385,7 +386,7 @@ public class Object {
       if (objA == objB) 
          return true;
 
-      if (objA == null || y == null) 
+      if (objA == null || objB == null) 
          return false;
 
       return objA.Equals(objB);
@@ -407,16 +408,39 @@ public class Object {
       // is related to pseudo number generating, which we don't really need to know the details
    }
     
-   // purely supported by compiler
+   // purely supported by compiler, you cannot "overload" this one (object x, object y), but overload other combinations e.g (T x, T y), see the example below
    public static bool operator ==(object x, object y)  // only check reference, doesn't call instance Equals method, same as ReferenceEquals
    {                                                   // why we still have it when we already have ReferenceEquals? because we can overload == operator in the derived type,
       // C++ low level code                            // it is inconvenient to do `(object)instanceA == (object)instanceB` compared to Object.ReferenceEquals(instanceA, instanceB)
    }
 
-   // purely supported by compiler
-   public static bool operator !=(object x, object y)
+   // purely supported by compiler, you cannot "overload" this one
+   public static bool operator !=(object x, object y)   // <------you have to also overload "!=" if you overload "==", otherwise there will be a compiler error
    {
       // C++ low level code 
+   }
+}
+```
+
+```C#
+// cannot overload "==(object x, object y)"
+// leave out != for simplicity
+public class Foo
+{
+   public static bool operator ==(Foo obj1, Foo obj2) {
+      // ...
+   }
+
+   public static bool operator ==(Foo obj1, object obj2) {
+      // ...
+   }
+
+   public static bool operator ==(object obj1, Foo obj2) {
+      // ...
+   }
+
+   public static bool operator ==(object x, object y)  {  // <------------Compiler Error CS0563
+      // ...                                                 one of the parameters of a binary operator must be the containing type
    }
 }
 ```
@@ -896,40 +920,3 @@ public abstract class EqualityComparer<T> : IEqualityComparer<T>, IEqualityCompa
 }
 ```
 The `Default` property checks whether type T implements the `System.IEquatable<T>` generic interface and, if so, returns an `EqualityComparer<T>` that invokes the implementation of the `IEquatable<T>.Equals` method. Otherwise, it returns an `EqualityComparer<T>` that uses the overrides of `Object.Equals` and `Object.GetHashCode` provided by T.
-
-<!-- <div class="alert alert-info p-1" role="alert">
-    
-</div> -->
-
-<!-- ![alt text](./zImages/17-6.png "Title") -->
-
-<!-- <code>&lt;T&gt;</code> -->
-
-<!-- <div class="alert alert-info pt-2 pb-0" role="alert">
-    <ul class="pl-1">
-      <li></li>
-      <li></li>
-    </ul>  
-</div> -->
-
-<!-- <ul>
-  <li><b></b></li>
-  <li><b></b></li>
-  <li><b></b></li>
-  <li><b></b></li>
-</ul>  -->
-
-<!-- <span style="color:red">hurt</span> -->
-
-<style type="text/css">
-.markdown-body {
-  max-width: 1800px;
-  margin-left: auto;
-  margin-right: auto;
-}
-</style>
-
-<link rel="stylesheet" href="./zCSS/bootstrap.min.css">
-<script src="./zCSS/jquery-3.3.1.slim.min.js"></script>
-<script src="./zCSS/popper.min.js"></script>
-<script src="./zCSS/bootstrap.min.js"></script>
